@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Workflow, WorkflowRepository } from '../core/workflow-repository.js'
 import { InMemoryWorkflowStore } from '../core/workflow-repository.js'
-import { SqliteWorkflowRepository } from './sqlite-workflows.js'
 import { PostgresWorkflowStore } from './postgres-workflows.js'
 import { setupPostgresTests, getDb, getUserA, getUserB } from './postgres-test-setup.js'
 
@@ -59,7 +58,6 @@ const contract = (label: string, make: () => WorkflowRepository): void => {
 }
 
 contract('InMemory (via InMemoryWorkflowStore.forUser)', () => new InMemoryWorkflowStore().forUser('user-a'))
-contract('Sqlite', () => new SqliteWorkflowRepository(':memory:'))
 
 describe('InMemoryWorkflowStore: cross-tenant isolation', () => {
   it('a workflow saved by user-a is not listed by user-b', async () => {

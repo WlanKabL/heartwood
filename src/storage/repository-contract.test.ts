@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import type { TreeNode } from '../core/types.js'
 import type { TreeRepository } from '../core/repository.js'
 import { InMemoryTreeStore } from '../core/repository.js'
-import { SqliteTreeRepository } from './sqlite.js'
 import { PostgresTreeStore } from './postgres-trees.js'
 import { setupPostgresTests, getDb, getUserA, getUserB } from './postgres-test-setup.js'
 
@@ -100,7 +99,6 @@ const contract = (name: string, make: () => TreeRepository): void => {
 }
 
 contract('InMemory (via InMemoryTreeStore.forUser)', () => new InMemoryTreeStore().forUser('user-a'))
-contract('Sqlite', () => new SqliteTreeRepository(':memory:'))
 
 // Cross-tenant isolation suite: every InMemoryTreeStore instance is the shared store;
 // user-a's data must be completely invisible to user-b and vice versa.

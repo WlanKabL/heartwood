@@ -1,34 +1,78 @@
-# Running Heartwood (Phase 1)
+# Running Heartwood
 
-A local HTTP MCP server with bearer-token auth. You connect it to Claude Code and build a project's truth tree through the real tools, with no seed script.
+A multi-tenant HTTP MCP server backed by Postgres. You log in with GitHub, mint a personal
+API token on the account page, and connect that token to Claude Code. Every tenant gets its
+own forest of trees; one token only ever sees its owner's data.
 
-## 1. Start the server
+## 1. Start Postgres and run migrations
 
-PowerShell:
-
-```powershell
-$env:HEARTWOOD_TOKEN = 'your-secret'; pnpm start
-```
-
-bash:
+Heartwood stores everything in Postgres. Start one (any instance reachable via `DATABASE_URL`):
 
 ```bash
-HEARTWOOD_TOKEN=your-secret pnpm start
+docker run -d --name heartwood-pg -p 5432:5432 \
+  -e POSTGRES_USER=heartwood -e POSTGRES_PASSWORD=heartwood -e POSTGRES_DB=heartwood \
+  postgres:16
 ```
 
-It listens on `http://localhost:8722/mcp`. All config is via env:
+Then apply the schema migrations:
+
+```bash
+pnpm db:migrate
+```
+
+## 2. Configure the environment
+
+Copy `.env.example` to `.env` and fill it in. All config is validated on startup, so the
+server refuses to boot with anything missing or malformed.
 
 | Var | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `HEARTWOOD_TOKEN` | yes | — | bearer token the client must send |
+| `DATABASE_URL` | yes | — | Postgres connection string |
+| `GITHUB_CLIENT_ID` | yes | — | GitHub OAuth app client id |
+| `GITHUB_CLIENT_SECRET` | yes | — | GitHub OAuth app client secret |
+| `SESSION_SECRET` | yes | — | cookie session key, **at least 32 characters** |
+| `PUBLIC_URL` | yes | — | publicly reachable base URL of this server, e.g. `http://localhost:8722` |
 | `PORT` | no | 8722 | HTTP port |
-| `DB_PATH` | no | ./heartwood.db | SQLite file, or `:memory:` for ephemeral |
 
-The server refuses to start without a token, so it is never unauthenticated by accident. `pnpm dev` does the same with auto-reload.
+`SESSION_SECRET` signs the browser login cookie; keep it secret and stable (rotating it logs
+everyone out). `PUBLIC_URL` is the base the OAuth callback is built from, so it must match what
+GitHub redirects back to.
 
-## 2. Connect from Claude Code
+## 3. Register a GitHub OAuth app
 
-Add to your project's `.mcp.json` (or `~/.claude.json`):
+Create one at <https://github.com/settings/developers> → **New OAuth App**:
+
+- **Homepage URL:** your `PUBLIC_URL` (e.g. `http://localhost:8722`).
+- **Authorization callback URL:** `${PUBLIC_URL}/auth/github/callback`
+  (e.g. `http://localhost:8722/auth/github/callback`).
+
+Copy the generated **Client ID** and a **Client Secret** into `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET`.
+
+Now start the server:
+
+```bash
+pnpm start
+```
+
+It listens on `${PUBLIC_URL}` and speaks MCP over Streamable HTTP at `/mcp`. `pnpm dev` does
+the same with auto-reload.
+
+## 4. Log in and mint a token
+
+1. Open `PUBLIC_URL` in a browser and click **Log in with GitHub**.
+2. After the redirect back, you land on your account page.
+3. Under **Create token**, give the token a name and submit. The raw token is shown **once** —
+   copy it immediately, it is never displayed again. Only a hash is stored, so a lost token
+   cannot be recovered, only deleted and replaced.
+
+The token is the only credential Claude Code needs. It identifies you to the server, and the
+server scopes every read and write to your account.
+
+## 5. Connect from Claude Code
+
+Add the server to your project's `.mcp.json` (or `~/.claude.json`), pasting the token you just
+minted into the `Authorization` header:
 
 ```json
 {
@@ -36,19 +80,46 @@ Add to your project's `.mcp.json` (or `~/.claude.json`):
     "heartwood": {
       "type": "http",
       "url": "http://localhost:8722/mcp",
-      "headers": { "Authorization": "Bearer your-secret" }
+      "headers": { "Authorization": "Bearer hw_your-minted-token" }
     }
   }
 }
 ```
 
-The token must match `HEARTWOOD_TOKEN`. A wrong or missing token is rejected with HTTP 401. That is the auth test: change the header to a wrong value and the server refuses every call.
+A wrong or missing token is rejected with HTTP 401, and a token only ever resolves to its
+owner's trees — two tenants never see each other's data.
 
-> MCP servers are loaded when a Claude Code session starts. Add the config, then open a **new** chat so it picks up.
+> MCP servers are loaded when a Claude Code session starts. Add the config, then open a **new**
+> chat so it picks up.
 
-## 3. Build the tree by hand
+To make a session load your protected core automatically, point a `SessionStart` hook at the
+roots endpoint with the same token. In `.claude/settings.local.json`:
 
-In a Claude Code chat with the server connected, the agent has four tools. A tree may have **several roots** (a forest); use that instead of overloading one node. Build deepest, most stable truths as roots, details below them:
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -H \"Authorization: Bearer hw_your-minted-token\" http://localhost:8722/trees/keeperlog/roots"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The endpoint returns the protected core (the high-hardness truths) for the named tree, gated by
+the same bearer token. Swap `keeperlog` for whichever tree id you are working on.
+
+## 6. Build the tree by hand
+
+In a Claude Code chat with the server connected, the agent has the tools below. A tree may have
+**several roots** (a forest); use that instead of overloading one node. Build deepest, most
+stable truths as roots, details below them:
 
 1. `get_tree { "treeId": "keeperlog" }` is empty at first.
 2. Create a root:
@@ -105,6 +176,10 @@ define_workflow name="plan_post"
 
 Then `run_workflow name="plan_post" input="the new collab"` returns the ready-to-use prompt.
 
-## Scope (Phase 1)
+## Scope
 
-This is the single-user core: create plus read, one static token, no change-governance and no accounts. Editing protected nodes with cascade confirmation, a multi-tenant account system, and build-methodology guidance (how to author a coherent tree) are later phases (see [ROADMAP.md](../ROADMAP.md)).
+This is the multi-tenant core: GitHub login, per-account API tokens, and tenant-scoped trees on
+Postgres, with cascade-confirmed editing of protected nodes. Every store instance is bound to a
+`userId`, so isolation cannot be forgotten and is enforced at the HTTP/MCP boundary (see
+`src/http/isolation.test.ts`). Build-methodology guidance (how to author a coherent tree) and
+richer governance are later phases (see [ROADMAP.md](../ROADMAP.md)).
