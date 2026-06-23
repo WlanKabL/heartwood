@@ -80,13 +80,30 @@ Write (protected nodes need `confirm: true`, which returns a cascade preview fir
 
 ## Workflows
 
-Workflows are MCP prompts (slash-commands in Claude Code) that load the project's truths and lay out a standard procedure. The defaults are starting points, adapt them per project:
+Workflows are MCP prompts (slash-commands) that load the project's truths and lay out a procedure. Two are built in and generic:
 
-| Workflow | Args | What it does |
+| Prompt | Args | What it does |
 | --- | --- | --- |
 | `build_guide` | `{ treeId }` | how to author a coherent tree, with the current core loaded |
-| `plan_feature` | `{ treeId, feature }` | works a feature through a Definition of Ready and Done, grounded in the truths |
-| `check_consistency` | `{ treeId, draft }` | flags where a draft (copy, plan, decision) contradicts the truths |
+| `check_consistency` | `{ treeId, draft }` | flags where a draft (copy, plan, message, decision) contradicts the truths |
+
+The rest are **yours**. Define your own with the `define_workflow` tool, then run them:
+
+| Tool | Input | Returns |
+| --- | --- | --- |
+| `define_workflow` | `{ treeId, name, description, template }` | the workflow |
+| `list_workflows` | `{ treeId }` | your workflows |
+| `delete_workflow` | `{ treeId, name }` | confirmation |
+| `run_workflow` | `{ treeId, name, input? }` | the filled-in text (also the `/run_workflow` prompt) |
+
+A `template` is plain text with two placeholders: `{{truths}}` is replaced with the protected core, `{{input}}` with the caller's input. The engine is content-agnostic, the same mechanism serves a developer's `plan_feature`, a company's `draft_okr`, a person's `write_message`. Example:
+
+```
+define_workflow name="plan_post"
+  template="On-brand truths:\n{{truths}}\n\nPlan a post about: {{input}}. Keep it consistent with the truths above."
+```
+
+Then `run_workflow name="plan_post" input="the new collab"` returns the ready-to-use prompt.
 
 ## Scope (Phase 1)
 

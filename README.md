@@ -68,4 +68,4 @@ Changing a hard node is blocked until a human confirms **with the cascade shown*
 
 ## Status
 
-Phase 1 in progress. The core engine, storage and a local HTTP MCP server with bearer-token auth are built and tested (58 tests). See [docs/usage.md](docs/usage.md) to run it and connect it to Claude Code, and [ROADMAP.md](ROADMAP.md) for what is next.
+**V1.** The single-user core is complete and tested (98 tests): the truth engine, SQLite storage, a local HTTP MCP server with bearer-token auth, write-governance (protected nodes need confirmation before a change), a SessionStart hook that auto-loads the truths into every chat, and workflows (two generic defaults plus user-defined ones via `define_workflow`). See [docs/usage.md](docs/usage.md) to run it and connect it to Claude Code. Next up: accounts, a frontend, multi-user. See [ROADMAP.md](ROADMAP.md).

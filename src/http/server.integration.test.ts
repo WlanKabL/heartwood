@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { InMemoryTreeRepository } from '../core/repository.js'
+import { InMemoryWorkflowRepository } from '../core/workflow-repository.js'
 import { createHttpServer } from './server.js'
 
 const TOKEN = 'test-token'
@@ -13,7 +14,8 @@ let running: Server | undefined
 
 const startServer = async (): Promise<URL> => {
   const repo = new InMemoryTreeRepository()
-  const server = createHttpServer({ token: TOKEN, deps: { repo, now: fixedNow } })
+  const workflows = new InMemoryWorkflowRepository()
+  const server = createHttpServer({ token: TOKEN, deps: { repo, workflows, now: fixedNow } })
   await new Promise<void>((resolve) => server.listen(0, () => resolve()))
   running = server
   const address = server.address()
@@ -67,11 +69,15 @@ describe('http + mcp end to end', () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
       'create_node',
+      'define_workflow',
       'delete_node',
+      'delete_workflow',
       'get_roots',
       'get_subtree',
       'get_tree',
+      'list_workflows',
       'move_node',
+      'run_workflow',
       'update_node',
     ])
     await client.close()
@@ -167,11 +173,41 @@ describe('http + mcp end to end', () => {
     })
 
     const { prompts } = await client.listPrompts()
-    expect(prompts.map((p) => p.name).sort()).toEqual(['build_guide', 'check_consistency', 'plan_feature'])
+    expect(prompts.map((p) => p.name).sort()).toEqual(['build_guide', 'check_consistency', 'run_workflow'])
 
     const built = await client.getPrompt({ name: 'build_guide', arguments: { treeId: 'w' } })
     const text = built.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
     expect(text).toContain('the one truth')
+    await client.close()
+  })
+
+  it('defines a custom workflow and runs it with truths filled in', async () => {
+    const url = await startServer()
+    const client = await connect(url, TOKEN)
+    await client.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'c', parentId: null, label: 'identity', content: 'a person who values calm' },
+    })
+    await client.callTool({
+      name: 'define_workflow',
+      arguments: {
+        treeId: 'c',
+        name: 'draft_message',
+        description: 'draft an on-voice message',
+        template: 'Voice truths:\n{{truths}}\n\nDraft a message about: {{input}}',
+      },
+    })
+    const ran = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: 'run_workflow',
+          arguments: { treeId: 'c', name: 'draft_message', input: 'a delay' },
+        }),
+      ),
+    )
+    const out = z.object({ text: z.string() }).parse(ran).text
+    expect(out).toContain('a person who values calm')
+    expect(out).toContain('a delay')
     await client.close()
   })
 })

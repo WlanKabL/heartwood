@@ -5,9 +5,12 @@ import { getResolvedTree, getResolvedSubtree, getProtectedNodes } from '../core/
 import { createNode } from '../core/create.js'
 import { updateNode, moveNode, deleteNode } from '../core/write.js'
 import { registerWorkflows } from './workflows.js'
+import type { WorkflowRepository } from '../core/workflow-repository.js'
+import { defineWorkflow, runWorkflow } from '../core/workflow.js'
 
 export interface McpDeps {
   repo: TreeRepository
+  workflows: WorkflowRepository
   now: () => Date
 }
 
@@ -195,6 +198,74 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
             now(),
           ),
         )
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'define_workflow',
+    {
+      description:
+        'Create or update a reusable workflow for a tree. The template is text with {{truths}} (filled with the protected core) and {{input}} (filled by the caller) placeholders. Workflows are how you adapt Heartwood to your own use case, whatever it is.',
+      inputSchema: {
+        treeId: z.string(),
+        name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, 'lowercase letters, digits, - and _'),
+        description: z.string(),
+        template: z.string().min(1),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(await defineWorkflow(deps.workflows, args, now()))
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'list_workflows',
+    {
+      description: 'List the workflows defined for a tree.',
+      inputSchema: { treeId: z.string() },
+    },
+    async ({ treeId }) => {
+      try {
+        return ok(await deps.workflows.listWorkflows(treeId))
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'delete_workflow',
+    {
+      description: 'Delete a workflow from a tree.',
+      inputSchema: { treeId: z.string(), name: z.string() },
+    },
+    async ({ treeId, name }) => {
+      try {
+        await deps.workflows.deleteWorkflow(treeId, name)
+        return ok({ deleted: name })
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'run_workflow',
+    {
+      description:
+        'Run a defined workflow: loads the protected truths and fills the template, returning ready-to-use text. Also available as the /run_workflow prompt.',
+      inputSchema: { treeId: z.string(), name: z.string(), input: z.string().optional() },
+    },
+    async (args) => {
+      try {
+        return ok({ text: await runWorkflow(deps.repo, deps.workflows, args, now()) })
       } catch (error) {
         return fail(error)
       }
