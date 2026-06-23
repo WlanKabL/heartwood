@@ -1,0 +1,21 @@
+# Nuxt
+.nuxt/
+.output/
+.data/
+.nitro/
+dist/
+
+# deps
+node_modules/
+
+# misc
+.DS_Store
+*.log
+
+# playwright mcp scratch + screenshots
+.playwright-mcp/
+*.local
+
+# local screenshots from dev verification
+landing-*.jpeg
+page-*.jpeg

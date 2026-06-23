@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Heartwood design tokens — the warm "field guide / specimen" language.
+   Paper is the primary theme; warm dark is the dark-mode switch (later).
+   --------------------------------------------------------------------------- */
+@theme {
+  --color-paper: #efe6d6;
+  --color-paper-2: #e7dcc7;
+  --color-ink: #2a2018;
+  --color-ink-2: #5e4c3a;
+  --color-rust: #9a5418;
+  --color-amber: #c07b2c;
+  --color-line: #cdbb9a;
+
+  /* hardness ramp: soft sapwood (low) -> dense heartwood (high) */
+  --color-h-0: #e7d8b5;
+  --color-h-1: #d8b27a;
+  --color-h-2: #b98a4e;
+  --color-h-3: #8a4f1c;
+  --color-h-4: #5a3717;
+
+  --font-serif: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* editorial helpers reused across the site */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.baseline {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(120, 85, 45, 0.045) 0 1px,
+    transparent 1px 30px
+  );
+}
