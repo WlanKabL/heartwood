@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { ResolvedNode } from '~/types/tree'
 import { hardnessColor } from '~/types/tree'
+import { createTreeNode } from '~/composables/treeApi'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
 
 const route = useRoute()
 const treeId = computed(() => String(route.params.treeId))
 
-const { data: forest, pending, error } = await useAsyncData(
+const { data: forest, pending, error, refresh } = await useAsyncData(
   () => `tree-${treeId.value}`,
   () => $fetch<ResolvedNode[]>(`/api/trees/${encodeURIComponent(treeId.value)}`),
   { watch: [treeId] },
@@ -16,6 +17,14 @@ const { data: forest, pending, error } = await useAsyncData(
 const view = ref<'rings' | 'outline'>('rings')
 const selected = ref<ResolvedNode | null>(null)
 const query = ref('')
+
+// new-root form
+const addingRoot = ref(false)
+const rootLabel = ref('')
+const rootContent = ref('')
+const rootHardness = ref('')
+const rootBusy = ref(false)
+const rootError = ref('')
 
 const flat = computed<ResolvedNode[]>(() => {
   const out: ResolvedNode[] = []
@@ -54,6 +63,41 @@ const pickSearch = (node: ResolvedNode): void => {
   selected.value = node
   query.value = ''
   view.value = 'rings'
+}
+
+// After any mutation: refetch the forest, then keep the selection pointed at the
+// fresh copy of the same node (or clear it if the node is gone).
+const onChanged = async (): Promise<void> => {
+  await refresh()
+  if (selected.value) {
+    const id = selected.value.id
+    selected.value = flat.value.find((n) => n.id === id) ?? null
+  }
+}
+
+const createRoot = async (): Promise<void> => {
+  if (rootBusy.value) return
+  rootBusy.value = true
+  rootError.value = ''
+  try {
+    const h = rootHardness.value.trim()
+    const res = await createTreeNode(treeId.value, {
+      parentId: null,
+      label: rootLabel.value.trim(),
+      content: rootContent.value.trim(),
+      hardnessSet: h === '' ? null : Math.max(0, Math.min(100, Number(h))),
+    })
+    addingRoot.value = false
+    rootLabel.value = ''
+    rootContent.value = ''
+    rootHardness.value = ''
+    selected.value = res.node
+    await onChanged()
+  } catch (e) {
+    rootError.value = e instanceof Error ? e.message : 'Could not create the root.'
+  } finally {
+    rootBusy.value = false
+  }
 }
 </script>
 
@@ -118,6 +162,12 @@ const pickSearch = (node: ResolvedNode): void => {
             outline
           </button>
         </div>
+        <button
+          class="rounded-sm bg-ink px-3 py-1.5 font-mono text-[0.72rem] text-paper transition-transform hover:-translate-y-0.5"
+          @click="addingRoot = true"
+        >
+          + root
+        </button>
       </div>
     </div>
 
@@ -137,8 +187,14 @@ const pickSearch = (node: ResolvedNode): void => {
           <div>
             <h2 class="font-serif text-2xl font-medium">This tree has no truths yet.</h2>
             <p class="mt-2 max-w-sm text-ink-2">
-              Create the first root from your agent over MCP, then it grows here.
+              Plant the first root here, or grow it from your agent over MCP.
             </p>
+            <button
+              class="mt-5 rounded-sm bg-ink px-5 py-2 font-mono text-[0.8rem] text-paper transition-transform hover:-translate-y-0.5"
+              @click="addingRoot = true"
+            >
+              + plant a root
+            </button>
           </div>
         </div>
 
@@ -156,55 +212,14 @@ const pickSearch = (node: ResolvedNode): void => {
 
       <!-- detail / legend panel -->
       <aside class="hidden w-[340px] shrink-0 overflow-auto border-l border-line bg-paper-2 px-5 py-6 lg:block">
-        <template v-if="selected">
-          <p class="kicker text-rust">selected truth</p>
-          <h3 class="mt-2 font-mono text-lg font-medium text-ink">{{ selected.label }}</h3>
-          <p class="mt-3 leading-relaxed text-ink">{{ selected.content }}</p>
-
-          <div class="mt-6">
-            <div class="flex items-baseline justify-between font-mono text-[0.7rem] text-ink-2">
-              <span>hardness</span>
-              <span class="text-ink">{{ selected.effectiveHardness }} / 100</span>
-            </div>
-            <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-paper">
-              <div
-                class="h-full rounded-full"
-                :style="{
-                  width: `${selected.effectiveHardness}%`,
-                  background: hardnessColor(selected.effectiveHardness),
-                }"
-              ></div>
-            </div>
-          </div>
-
-          <dl class="mt-6 space-y-2 font-mono text-[0.72rem]">
-            <div class="flex justify-between border-b border-line py-1">
-              <dt class="text-ink-2">protected</dt>
-              <dd :class="selected.protected ? 'text-rust' : 'text-ink-2'">
-                {{ selected.protected ? 'yes' : 'no' }}
-              </dd>
-            </div>
-            <div class="flex justify-between border-b border-line py-1">
-              <dt class="text-ink-2">depth from root</dt>
-              <dd class="text-ink">{{ selected.depthFromRoot }}</dd>
-            </div>
-            <div class="flex justify-between border-b border-line py-1">
-              <dt class="text-ink-2">carries below</dt>
-              <dd class="text-ink">{{ selected.descendantWeight }}</dd>
-            </div>
-            <div class="flex justify-between border-b border-line py-1">
-              <dt class="text-ink-2">direct children</dt>
-              <dd class="text-ink">{{ selected.children.length }}</dd>
-            </div>
-          </dl>
-
-          <button
-            class="mt-6 font-mono text-[0.72rem] text-ink-2 hover:text-ink"
-            @click="choose(null)"
-          >
-            clear selection
-          </button>
-        </template>
+        <AppNodeEditor
+          v-if="selected"
+          :tree-id="treeId"
+          :node="selected"
+          :all-nodes="flat"
+          @select="choose"
+          @changed="onChanged"
+        />
 
         <template v-else>
           <p class="kicker text-rust">reading the rings</p>
@@ -235,6 +250,60 @@ const pickSearch = (node: ResolvedNode): void => {
           </div>
         </template>
       </aside>
+    </div>
+
+    <!-- new root modal -->
+    <div
+      v-if="addingRoot"
+      class="fixed inset-0 z-50 grid place-items-center bg-ink/40 px-4"
+      @click.self="addingRoot = false"
+    >
+      <form
+        class="w-full max-w-md rounded-sm border-2 border-ink bg-paper p-6 shadow-2xl"
+        @submit.prevent="createRoot"
+      >
+        <p class="kicker text-rust">a new root</p>
+        <h2 class="mt-2 font-serif text-2xl font-medium tracking-tight">Plant a root truth</h2>
+        <p class="mt-1 text-[0.88rem] text-ink-2">
+          Roots are the hardest, most authoritative truths. Add only what rarely changes.
+        </p>
+        <input
+          v-model="rootLabel"
+          required
+          placeholder="label, e.g. identity"
+          class="mt-4 w-full rounded-sm border border-line bg-paper-2 px-3 py-2 font-mono text-sm outline-none focus:border-ink"
+        />
+        <textarea
+          v-model="rootContent"
+          required
+          rows="4"
+          placeholder="the single truth this root holds"
+          class="mt-3 w-full rounded-sm border border-line bg-paper-2 px-3 py-2 text-sm outline-none focus:border-ink"
+        ></textarea>
+        <input
+          v-model="rootHardness"
+          inputmode="numeric"
+          placeholder="propose hardness 0-100 (optional)"
+          class="mt-3 w-full rounded-sm border border-line bg-paper-2 px-3 py-2 font-mono text-sm outline-none focus:border-ink"
+        />
+        <p v-if="rootError" class="mt-3 font-mono text-[0.74rem] text-rust">{{ rootError }}</p>
+        <div class="mt-5 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            class="font-mono text-[0.82rem] text-ink-2 hover:text-ink"
+            @click="addingRoot = false"
+          >
+            cancel
+          </button>
+          <button
+            type="submit"
+            :disabled="rootBusy || !rootLabel.trim() || !rootContent.trim()"
+            class="rounded-sm bg-ink px-5 py-2 text-[0.88rem] font-semibold text-paper transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+          >
+            {{ rootBusy ? 'Planting…' : 'Plant root' }}
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </template>

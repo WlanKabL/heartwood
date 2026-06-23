@@ -28,6 +28,27 @@ export interface ApiToken {
   lastUsedAt?: string | null
 }
 
+export interface CascadePreview {
+  requiresConfirmation: true
+  reason: string
+  affected: { id: string; label: string; effectiveHardness: number }[]
+}
+
+export interface CreateResult {
+  node: ResolvedNode
+  hardnessNote?: string
+  volatilityWarning?: string
+  similarTo?: { id: string; label: string }
+}
+
+export interface UpdateResult {
+  node: ResolvedNode
+  hardnessNote?: string
+}
+
+export const isCascadePreview = (r: unknown): r is CascadePreview =>
+  typeof r === 'object' && r !== null && (r as { requiresConfirmation?: unknown }).requiresConfirmation === true
+
 /** Maps a 0-100 hardness onto the walnut ramp tokens defined in main.css. */
 export const hardnessColor = (h: number): string => {
   if (h >= 85) return 'var(--color-h-4)'
