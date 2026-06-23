@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Workflow, WorkflowRepository } from '../core/workflow-repository.js'
-import { InMemoryWorkflowRepository } from '../core/workflow-repository.js'
+import { InMemoryWorkflowStore } from '../core/workflow-repository.js'
 import { SqliteWorkflowRepository } from './sqlite-workflows.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -56,5 +56,46 @@ const contract = (label: string, make: () => WorkflowRepository): void => {
   })
 }
 
-contract('InMemory', () => new InMemoryWorkflowRepository())
+contract('InMemory (via InMemoryWorkflowStore.forUser)', () => new InMemoryWorkflowStore().forUser('user-a'))
 contract('Sqlite', () => new SqliteWorkflowRepository(':memory:'))
+
+describe('InMemoryWorkflowStore: cross-tenant isolation', () => {
+  it('a workflow saved by user-a is not listed by user-b', async () => {
+    const store = new InMemoryWorkflowStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.saveWorkflow(wf('t1', 'my-workflow'))
+    expect(await repoB.listWorkflows('t1')).toHaveLength(0)
+  })
+
+  it('a workflow saved by user-a is not found by user-b via getWorkflow', async () => {
+    const store = new InMemoryWorkflowStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.saveWorkflow(wf('t1', 'my-workflow'))
+    expect(await repoB.getWorkflow('t1', 'my-workflow')).toBeUndefined()
+  })
+
+  it('deleteWorkflow of user-a workflow from user-b throws not found', async () => {
+    const store = new InMemoryWorkflowStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.saveWorkflow(wf('t1', 'my-workflow'))
+    await expect(repoB.deleteWorkflow('t1', 'my-workflow')).rejects.toThrow(/not found/)
+  })
+
+  it('two users can each have a workflow with the same name in the same tree', async () => {
+    const store = new InMemoryWorkflowStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.saveWorkflow(wf('t1', 'shared-name', { template: 'user-a template' }))
+    await repoB.saveWorkflow(wf('t1', 'shared-name', { template: 'user-b template' }))
+
+    expect((await repoA.getWorkflow('t1', 'shared-name'))?.template).toBe('user-a template')
+    expect((await repoB.getWorkflow('t1', 'shared-name'))?.template).toBe('user-b template')
+  })
+})
