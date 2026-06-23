@@ -129,3 +129,24 @@ describe('ageDaysBetween', () => {
     expect(ageDaysBetween('2026-01-11T00:00:00.000Z', new Date('2026-01-01T00:00:00.000Z'))).toBe(0)
   })
 })
+
+describe('effectiveHardness rounding', () => {
+  it('resolved node effectiveHardness has at most one decimal place', () => {
+    // Use a non-trivial age so internal computation produces a float like 64.50022...
+    const later = new Date('2026-07-01T00:00:00.000Z')
+    const nodes = [
+      node('r', null),
+      node('a', 'r', { lastConfirmedAt: '2026-01-01T00:00:00.000Z' }),
+      node('b', 'a', { lastConfirmedAt: '2026-01-01T00:00:00.000Z' }),
+    ]
+    const tree = resolveTree(nodes, later)
+    for (const root of tree) {
+      const check = (n: typeof root): void => {
+        const decimals = (n.effectiveHardness.toString().split('.')[1] ?? '').length
+        expect(decimals).toBeLessThanOrEqual(1)
+        for (const child of n.children) check(child)
+      }
+      check(root)
+    }
+  })
+})

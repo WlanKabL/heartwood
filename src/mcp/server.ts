@@ -83,7 +83,10 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
     {
       description: [
         'Add a truth to a tree. Set parentId to an existing node id to nest it, or null to start a new root; several roots are allowed.',
-        'Hardness is decided by the server from the node position: a proposed hardnessSet is clamped into the structurally allowed band and can never exceed it.',
+        'label is a short title for the truth (e.g. "voice", "pricing-model"). content is the single truth itself, written as a durable statement.',
+        'Hardness is decided by the server from the node position: a proposed hardnessSet is only a hint.',
+        'The server clamps it into the structurally allowed band and may RAISE it to a floor (roots are always hard) or LOWER it to a ceiling (a shallow leaf cannot be softer than its load demands).',
+        'hardnessSet is never taken at face value. When it is clamped, the response includes a hardnessNote explaining what happened.',
         'Structure guidance: add only DURABLE truths. If the content would be wrong in a few months (a price, a metric, a percentage, a current number), it belongs in a decision-record document, not in the tree. One node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent.',
       ].join(' '),
       inputSchema: {
@@ -119,7 +122,7 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
     'update_node',
     {
       description:
-        "Edit a node's content, label or proposed hardness. If the node is protected, this returns a cascade preview (what hangs on it) instead of changing it; show it to the human and re-run with confirm: true after they approve.",
+        "Edit a node's content, label or proposed hardness. If the node is protected, this returns a cascade preview (what hangs on it) instead of changing it; show it to the human and re-run with confirm: true after they approve. A proposed hardnessSet is only a hint: the server may raise it to a floor or lower it to a ceiling based on the node's structural position. When clamped, the response includes a hardnessNote.",
       inputSchema: {
         treeId: z.string(),
         nodeId: z.string(),

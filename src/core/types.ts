@@ -33,6 +33,12 @@ export interface HardnessResult {
   floor: number
   ceiling: number
   effectiveHardness: number
+  /** How the proposed hardnessSet was treated. 'none' when no set was provided or it fit the band. */
+  clamp: 'none' | 'raised-to-floor' | 'lowered-to-ceiling'
+  /** The value proposed via hardnessSet, or null when none was provided. */
+  proposed: number | null
+  /** The value actually applied after clamping (same as effectiveHardness; convenience field for callers). */
+  applied: number
 }
 
 /** A node enriched with its computed position and hardness, the view an agent receives. */

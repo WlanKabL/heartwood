@@ -52,11 +52,29 @@ export const computeHardness = (input: HardnessInput): HardnessResult => {
   const floor = structuralBase * FLOOR_FACTOR
 
   let raw = structuralBase + provenBonus(input.ageDays)
+  const proposed: number | null = input.hardnessSet ?? null
+
   if (input.hardnessSet !== null) {
     const setClamped = clamp(input.hardnessSet, 0, ceiling)
     raw += (setClamped - structuralBase) * SET_INFLUENCE
   }
 
+  const rawBeforeFinalClamp = raw
   const effectiveHardness = clamp(raw, floor, ceiling)
-  return { structuralBase, floor, ceiling, effectiveHardness }
+
+  // Determine how the proposal was treated:
+  // - 'lowered-to-ceiling': the proposal exceeded the structural ceiling and was pulled down
+  //   (the setClamped step already applied this, before the final floor/ceiling clamp).
+  // - 'raised-to-floor': the final clamp pushed the blended value UP to the floor.
+  // - 'none': the proposal fit in the band, or no proposal was given.
+  let clampKind: 'none' | 'raised-to-floor' | 'lowered-to-ceiling' = 'none'
+  if (proposed !== null) {
+    if (proposed > ceiling) {
+      clampKind = 'lowered-to-ceiling'
+    } else if (effectiveHardness > rawBeforeFinalClamp) {
+      clampKind = 'raised-to-floor'
+    }
+  }
+
+  return { structuralBase, floor, ceiling, effectiveHardness, clamp: clampKind, proposed, applied: effectiveHardness }
 }

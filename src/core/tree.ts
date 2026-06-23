@@ -82,12 +82,14 @@ const resolveFromIndex = (index: TreeIndex, nodeId: string, now: Date): Resolved
   if (!node) throw new Error(`unknown node: ${nodeId}`)
   const depthFromRoot = index.depth.get(nodeId) ?? 0
   const descendantWeight = index.descendantWeight.get(nodeId) ?? 0
-  const { effectiveHardness } = computeHardness({
+  const { effectiveHardness: rawHardness } = computeHardness({
     depthFromRoot,
     descendantWeight,
     hardnessSet: node.hardnessSet,
     ageDays: ageDaysBetween(node.lastConfirmedAt, now),
   })
+  // Round to one decimal for stable, readable output. Internal computation stays full-precision.
+  const effectiveHardness = Math.round(rawHardness * 10) / 10
   const children = (index.childrenOf.get(nodeId) ?? []).map((child) =>
     resolveFromIndex(index, child.id, now),
   )

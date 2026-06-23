@@ -7,7 +7,7 @@ const NOW = new Date('2026-01-01T00:00:00.000Z')
 describe('createNode', () => {
   it('creates a root and computes its hardness from position', async () => {
     const repo = new InMemoryTreeStore().forUser('test-user')
-    const root = await createNode(
+    const { node: root } = await createNode(
       repo,
       { treeId: 't1', parentId: null, label: 'identity', content: 'portable animal record' },
       NOW,
@@ -19,8 +19,8 @@ describe('createNode', () => {
 
   it('creates a child under an existing parent', async () => {
     const repo = new InMemoryTreeStore().forUser('test-user')
-    const root = await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)
-    const child = await createNode(repo, { treeId: 't1', parentId: root.id, label: 'voice', content: 'y' }, NOW)
+    const { node: root } = await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)
+    const { node: child } = await createNode(repo, { treeId: 't1', parentId: root.id, label: 'voice', content: 'y' }, NOW)
     expect(child.parentId).toBe(root.id)
     expect(child.depthFromRoot).toBe(1)
   })
@@ -28,7 +28,7 @@ describe('createNode', () => {
   it('allows several roots in the same tree', async () => {
     const repo = new InMemoryTreeStore().forUser('test-user')
     await createNode(repo, { treeId: 't1', parentId: null, label: 'identity', content: 'x' }, NOW)
-    const second = await createNode(repo, { treeId: 't1', parentId: null, label: 'voice', content: 'y' }, NOW)
+    const { node: second } = await createNode(repo, { treeId: 't1', parentId: null, label: 'voice', content: 'y' }, NOW)
     expect(second.parentId).toBeNull()
     expect(second.depthFromRoot).toBe(0)
   })
@@ -42,16 +42,41 @@ describe('createNode', () => {
 
   it('clamps a proposed hardness on a deep leaf so it stays unprotected (the QR case)', async () => {
     const repo = new InMemoryTreeStore().forUser('test-user')
-    let parent = await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)
+    let parent = (await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)).node
     for (const label of ['a', 'b', 'c', 'd']) {
-      parent = await createNode(repo, { treeId: 't1', parentId: parent.id, label, content: 'x' }, NOW)
+      parent = (await createNode(repo, { treeId: 't1', parentId: parent.id, label, content: 'x' }, NOW)).node
     }
-    const leaf = await createNode(
+    const { node: leaf, hardnessNote } = await createNode(
       repo,
       { treeId: 't1', parentId: parent.id, label: 'qr', content: 'qr handover', hardnessSet: 100 },
       NOW,
     )
     expect(leaf.protected).toBe(false)
     expect(leaf.effectiveHardness).toBeLessThan(50)
+    // A high proposal on a deep leaf hits the ceiling and should surface a note.
+    expect(hardnessNote).toBeDefined()
+    expect(hardnessNote).toMatch(/structurally light/)
+  })
+
+  it('returns hardnessNote when a root proposal is raised to the floor', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { hardnessNote } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'identity', content: 'x', hardnessSet: 20 },
+      NOW,
+    )
+    expect(hardnessNote).toBeDefined()
+    expect(hardnessNote).toMatch(/raised/)
+    expect(hardnessNote).toMatch(/20/)
+  })
+
+  it('returns no hardnessNote when no hardnessSet is proposed', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { hardnessNote } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'identity', content: 'x' },
+      NOW,
+    )
+    expect(hardnessNote).toBeUndefined()
   })
 })

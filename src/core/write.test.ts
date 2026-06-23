@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { TreeNode, ResolvedNode } from './types.js'
 import { InMemoryTreeStore } from './repository.js'
 import type { TreeRepository } from './repository.js'
-import { updateNode, moveNode, deleteNode, type CascadePreview } from './write.js'
+import { updateNode, moveNode, deleteNode, type CascadePreview, type UpdateNodeResult } from './write.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
 const NOW = new Date(STAMP)
@@ -29,11 +29,12 @@ const chainRepo = async (): Promise<TreeRepository> => {
   return repo
 }
 
-const asNode = (r: ResolvedNode | CascadePreview): ResolvedNode => {
+const asNode = (r: UpdateNodeResult | ResolvedNode | CascadePreview): ResolvedNode => {
   if ('requiresConfirmation' in r) throw new Error('expected a node, got a confirmation preview')
+  if ('node' in r) return r.node
   return r
 }
-const asPreview = (r: ResolvedNode | CascadePreview): CascadePreview => {
+const asPreview = (r: UpdateNodeResult | ResolvedNode | CascadePreview): CascadePreview => {
   if (!('requiresConfirmation' in r)) throw new Error('expected a confirmation preview')
   return r
 }

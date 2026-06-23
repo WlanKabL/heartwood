@@ -68,7 +68,16 @@ const textOf = (result: unknown): string => {
   if (!first || first.type !== 'text' || first.text === undefined) throw new Error('expected text content')
   return first.text
 }
-const parseOne = (result: unknown): z.infer<typeof NodeView> => NodeView.parse(JSON.parse(textOf(result)))
+/**
+ * create_node and update_node now return { node: NodeView, hardnessNote?: string }.
+ * get_tree / get_subtree / get_roots return a plain NodeView or an array.
+ * parseOne handles both shapes so callers don't need to know which tool was called.
+ */
+const parseOne = (result: unknown): z.infer<typeof NodeView> => {
+  const raw = JSON.parse(textOf(result))
+  const wrapped = z.object({ node: NodeView }).safeParse(raw)
+  return wrapped.success ? wrapped.data.node : NodeView.parse(raw)
+}
 const parseForest = (result: unknown): z.infer<typeof NodeView>[] =>
   z.array(NodeView).parse(JSON.parse(textOf(result)))
 

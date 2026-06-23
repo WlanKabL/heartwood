@@ -1,6 +1,7 @@
 import type { TreeRepository } from './repository.js'
 import type { ResolvedNode, TreeNode } from './types.js'
-import { resolveSubtree } from './tree.js'
+import { resolveSubtree, buildTree, ageDaysBetween } from './tree.js'
+import { computeHardness } from './hardness.js'
 
 /**
  * Returned INSTEAD of performing a change when a protected (or load-bearing) node is
@@ -38,12 +39,26 @@ export interface UpdateNodeInput {
   confirm?: boolean
 }
 
+export interface UpdateNodeResult {
+  node: ResolvedNode
+  /** Present only when the proposed hardnessSet was clamped by structural constraints. */
+  hardnessNote?: string
+}
+
+/** Builds a plain-language note when a hardnessSet proposal was clamped. */
+const buildHardnessNote = (proposed: number, applied: number, clamp: 'raised-to-floor' | 'lowered-to-ceiling'): string => {
+  if (clamp === 'raised-to-floor') {
+    return `hardness set ${proposed} → ${applied}: a root is structurally hard, so it was raised.`
+  }
+  return `hardness set ${proposed} → ${applied}: this node is structurally light; hang it higher if it should be load-bearing.`
+}
+
 /** Edits a node's content, label or proposed hardness. Protected nodes need confirm. */
 export const updateNode = async (
   repo: TreeRepository,
   input: UpdateNodeInput,
   now: Date,
-): Promise<ResolvedNode | CascadePreview> => {
+): Promise<UpdateNodeResult | CascadePreview> => {
   const existing = await repo.listNodes(input.treeId)
   const target = requireNode(existing, input.treeId, input.nodeId)
   const resolved = resolveSubtree(existing, input.nodeId, now)
@@ -65,11 +80,29 @@ export const updateNode = async (
     lastConfirmedAt: contentChanged || labelChanged ? stamp : target.lastConfirmedAt,
   }
   await repo.updateNode(updated)
-  return resolveSubtree(
-    existing.map((n) => (n.id === updated.id ? updated : n)),
-    updated.id,
-    now,
-  )
+
+  const allNodes = existing.map((n) => (n.id === updated.id ? updated : n))
+  const resolvedNode = resolveSubtree(allNodes, updated.id, now)
+
+  let hardnessNote: string | undefined
+  const proposedSet = input.hardnessSet !== undefined ? input.hardnessSet : null
+  if (proposedSet != null) {
+    const index = buildTree(allNodes)
+    const depthFromRoot = index.depth.get(updated.id) ?? 0
+    const descendantWeight = index.descendantWeight.get(updated.id) ?? 0
+    const result = computeHardness({
+      depthFromRoot,
+      descendantWeight,
+      hardnessSet: proposedSet,
+      ageDays: ageDaysBetween(updated.lastConfirmedAt, now),
+    })
+    if (result.clamp !== 'none' && result.proposed !== null) {
+      const roundedApplied = Math.round(result.applied * 10) / 10
+      hardnessNote = buildHardnessNote(result.proposed, roundedApplied, result.clamp)
+    }
+  }
+
+  return { node: resolvedNode, hardnessNote }
 }
 
 export interface MoveNodeInput {

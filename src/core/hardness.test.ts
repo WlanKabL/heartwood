@@ -47,4 +47,27 @@ describe('computeHardness', () => {
       expect(r.effectiveHardness).toBeLessThanOrEqual(100)
     }
   })
+
+  it('clamp is none when no hardnessSet is provided', () => {
+    const r = computeHardness({ depthFromRoot: 1, descendantWeight: 0, hardnessSet: null, ageDays: 0 })
+    expect(r.clamp).toBe('none')
+    expect(r.proposed).toBeNull()
+  })
+
+  it('clamp is raised-to-floor when a root is proposed a low hardnessSet (e.g. 20)', () => {
+    // A root (depth 0) has a very high structural base (~100) and floor (~80).
+    // Proposing 20 produces a raw value pulled DOWN by the set, but the floor clamp lifts it.
+    const r = computeHardness({ depthFromRoot: 0, descendantWeight: 0, hardnessSet: 20, ageDays: 0 })
+    expect(r.clamp).toBe('raised-to-floor')
+    expect(r.proposed).toBe(20)
+    expect(r.applied).toBeGreaterThanOrEqual(r.floor)
+  })
+
+  it('clamp is lowered-to-ceiling when a deep leaf is proposed a high hardnessSet (e.g. 100)', () => {
+    // A deep leaf (depth 5) has a low ceiling. Proposing 100 gets pulled down.
+    const r = computeHardness({ depthFromRoot: 5, descendantWeight: 0, hardnessSet: 100, ageDays: 0 })
+    expect(r.clamp).toBe('lowered-to-ceiling')
+    expect(r.proposed).toBe(100)
+    expect(r.applied).toBeLessThanOrEqual(r.ceiling)
+  })
 })
