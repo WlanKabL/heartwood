@@ -63,6 +63,10 @@ export const buildServer = (deps: ServerDeps): FastifyInstance => {
 
   registerPages(app, { db: deps.db })
 
+  app.get('/health', async (_request, reply) => {
+    return reply.code(200).send({ status: 'ok' })
+  })
+
   app.all('/mcp', async (request, reply) => {
     const userId = await resolveToken(deps.db, request.headers.authorization, deps.now)
     if (userId === null) {

@@ -13,7 +13,8 @@
     "dev:server": "tsx watch --env-file=.env src/main.ts",
     "dev:web": "pnpm -C web dev",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "tsx src/scripts/migrate.ts"
   },
   "keywords": [],
   "author": "",
