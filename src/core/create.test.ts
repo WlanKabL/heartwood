@@ -79,4 +79,103 @@ describe('createNode', () => {
     )
     expect(hardnessNote).toBeUndefined()
   })
+
+  // --- volatility warning ---
+
+  it('returns a volatilityWarning when content contains a price', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { volatilityWarning } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'pricing', content: 'starter plan costs €9 per month' },
+      NOW,
+    )
+    expect(volatilityWarning).toBeDefined()
+    expect(volatilityWarning).toMatch(/changing figure/)
+  })
+
+  it('returns a volatilityWarning when content contains a percentage', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { volatilityWarning } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'conversion', content: 'sign-up conversion is 4% this quarter' },
+      NOW,
+    )
+    expect(volatilityWarning).toBeDefined()
+  })
+
+  it('returns a volatilityWarning when content contains an ISO date', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { volatilityWarning } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'launch', content: 'public launch was 2024-03-15' },
+      NOW,
+    )
+    expect(volatilityWarning).toBeDefined()
+  })
+
+  it('returns a volatilityWarning when content contains an explicit version', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { volatilityWarning } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'stack', content: 'deployed on v2.1 of the runtime' },
+      NOW,
+    )
+    expect(volatilityWarning).toBeDefined()
+  })
+
+  it('does not return a volatilityWarning for clean durable content', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { volatilityWarning } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'identity', content: 'built by a keeper for keepers' },
+      NOW,
+    )
+    expect(volatilityWarning).toBeUndefined()
+  })
+
+  // --- dedup / similarTo hint ---
+
+  it('returns similarTo when another node shares salient label words', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { node: existing } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'pricing model', content: 'subscription only' },
+      NOW,
+    )
+    const { similarTo } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'pricing strategy', content: 'tiered plans' },
+      NOW,
+    )
+    expect(similarTo).toBeDefined()
+    expect(similarTo?.id).toBe(existing.id)
+    expect(similarTo?.label).toBe('pricing model')
+  })
+
+  it('does not return similarTo for a clearly distinct node', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'authentication approach', content: 'jwt refresh tokens' },
+      NOW,
+    )
+    const { similarTo } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'visual identity', content: 'dark editorial palette' },
+      NOW,
+    )
+    expect(similarTo).toBeUndefined()
+  })
+
+  it('does not include the newly created node itself in the similarTo result', async () => {
+    const repo = new InMemoryTreeStore().forUser('test-user')
+    const { node, similarTo } = await createNode(
+      repo,
+      { treeId: 't1', parentId: null, label: 'brand identity', content: 'editorial and bold' },
+      NOW,
+    )
+    // Only one node exists: the new one. It must not point at itself.
+    expect(similarTo?.id).not.toBe(node.id)
+    expect(similarTo).toBeUndefined()
+  })
 })

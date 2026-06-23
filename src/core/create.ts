@@ -4,6 +4,7 @@ import type { ResolvedNode, TreeNode } from './types.js'
 import { resolveSubtree } from './tree.js'
 import { computeHardness } from './hardness.js'
 import { ageDaysBetween, buildTree } from './tree.js'
+import { detectVolatility } from './volatility.js'
 
 export interface CreateNodeInput {
   treeId: string
@@ -17,6 +18,10 @@ export interface CreateNodeResult {
   node: ResolvedNode
   /** Present only when the proposed hardnessSet was clamped by structural constraints. */
   hardnessNote?: string
+  /** Advisory: present when the content looks like it may become stale (price, date, version, etc.). The node is always created regardless. */
+  volatilityWarning?: string
+  /** Advisory: present when an existing node in the same tree has a similar label. The node is always created regardless. */
+  similarTo?: { id: string; label: string }
 }
 
 /** Builds a plain-language note when a hardnessSet proposal was clamped. */
@@ -83,5 +88,41 @@ export const createNode = async (
     }
   }
 
-  return { node: resolvedNode, hardnessNote }
+  // Advisory: flag content that is likely to go stale.
+  const volatilityWarning = detectVolatility(input.content) ?? undefined
+
+  // Advisory: look for existing nodes whose label shares salient words with the new one.
+  const STOPWORDS = new Set(['this', 'that', 'with', 'from', 'have', 'will', 'been', 'they', 'their', 'your', 'what'])
+  const salientWords = input.label
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !STOPWORDS.has(w))
+
+  let similarTo: { id: string; label: string } | undefined
+  if (salientWords.length > 0) {
+    // Track how many salient words each candidate node matches.
+    const scores = new Map<string, { node: TreeNode; count: number }>()
+    for (const word of salientWords) {
+      const matches = await repo.searchNodes(input.treeId, word)
+      for (const candidate of matches) {
+        if (candidate.id === node.id) continue // skip the node we just created
+        const entry = scores.get(candidate.id)
+        if (entry) {
+          entry.count++
+        } else {
+          scores.set(candidate.id, { node: candidate, count: 1 })
+        }
+      }
+    }
+    // Pick the best-matching candidate.
+    let best: { node: TreeNode; count: number } | undefined
+    for (const entry of scores.values()) {
+      if (!best || entry.count > best.count) best = entry
+    }
+    if (best) {
+      similarTo = { id: best.node.id, label: best.node.label }
+    }
+  }
+
+  return { node: resolvedNode, hardnessNote, volatilityWarning, similarTo }
 }

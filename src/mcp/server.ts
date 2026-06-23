@@ -87,6 +87,9 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
         'Hardness is decided by the server from the node position: a proposed hardnessSet is only a hint.',
         'The server clamps it into the structurally allowed band and may RAISE it to a floor (roots are always hard) or LOWER it to a ceiling (a shallow leaf cannot be softer than its load demands).',
         'hardnessSet is never taken at face value. When it is clamped, the response includes a hardnessNote explaining what happened.',
+        'The response may also include two advisory fields — both are informational only and never block the create:',
+        'volatilityWarning is set when the content looks like it contains a changing figure (price, percentage, date, or version) that may go stale.',
+        'similarTo points at an existing node whose label shares salient words with the new one, as a dedup hint.',
         'Structure guidance: add only DURABLE truths. If the content would be wrong in a few months (a price, a metric, a percentage, a current number), it belongs in a decision-record document, not in the tree. One node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent.',
       ].join(' '),
       inputSchema: {
