@@ -7,6 +7,9 @@ build/
 !.env.example
 *.sqlite
 *.sqlite3
+*.db
+*.db-shm
+*.db-wal
 .DS_Store
 .vscode/
 .idea/
