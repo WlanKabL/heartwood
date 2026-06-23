@@ -2,22 +2,43 @@ import { describe, it, expect } from 'vitest'
 import { loadConfig } from './config.js'
 
 describe('loadConfig', () => {
-  it('parses a valid environment', () => {
-    const config = loadConfig({ HEARTWOOD_TOKEN: 'secret', PORT: '9000', DB_PATH: '/tmp/x.db' })
-    expect(config).toEqual({ port: 9000, token: 'secret', dbPath: '/tmp/x.db' })
+  it('parses the multi-tenant env', () => {
+    const cfg = loadConfig({
+      DATABASE_URL: 'postgres://u:p@localhost:5432/heartwood',
+      GITHUB_CLIENT_ID: 'id',
+      GITHUB_CLIENT_SECRET: 'secret',
+      SESSION_SECRET: 'x'.repeat(32),
+      PUBLIC_URL: 'http://localhost:8722',
+    })
+    expect(cfg.databaseUrl).toContain('postgres://')
+    expect(cfg.github.clientId).toBe('id')
   })
 
-  it('applies defaults for port and db path', () => {
-    const config = loadConfig({ HEARTWOOD_TOKEN: 'secret' })
-    expect(config.port).toBe(8722)
-    expect(config.dbPath).toBe('./heartwood.db')
+  it('applies the default port', () => {
+    const cfg = loadConfig({
+      DATABASE_URL: 'postgres://u:p@localhost:5432/heartwood',
+      GITHUB_CLIENT_ID: 'id',
+      GITHUB_CLIENT_SECRET: 'secret',
+      SESSION_SECRET: 'x'.repeat(32),
+      PUBLIC_URL: 'http://localhost:8722',
+    })
+    expect(cfg.port).toBe(8722)
   })
 
-  it('throws when the token is missing', () => {
-    expect(() => loadConfig({})).toThrow(/HEARTWOOD_TOKEN/)
+  it('rejects a missing DATABASE_URL', () => {
+    expect(() => loadConfig({})).toThrow(/DATABASE_URL/)
   })
 
   it('throws on an invalid port', () => {
-    expect(() => loadConfig({ HEARTWOOD_TOKEN: 's', PORT: 'abc' })).toThrow(/invalid configuration/)
+    expect(() =>
+      loadConfig({
+        DATABASE_URL: 'postgres://u:p@localhost:5432/heartwood',
+        GITHUB_CLIENT_ID: 'id',
+        GITHUB_CLIENT_SECRET: 'secret',
+        SESSION_SECRET: 'x'.repeat(32),
+        PUBLIC_URL: 'http://localhost:8722',
+        PORT: 'abc',
+      }),
+    ).toThrow(/invalid configuration/)
   })
 })
