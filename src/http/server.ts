@@ -10,6 +10,7 @@ import { resolveToken } from '../auth/tokens.js'
 import type { Db } from '../storage/db.js'
 import type { TreeStore } from '../core/repository.js'
 import type { WorkflowStore } from '../core/workflow-repository.js'
+import { registerAuthRoutes } from './auth-routes.js'
 
 export interface ServerDeps {
   db: Db
@@ -17,6 +18,8 @@ export interface ServerDeps {
   workflowStore: WorkflowStore
   now: () => Date
   sessionSecret: string
+  github: { clientId: string; clientSecret: string }
+  publicUrl: string
 }
 
 /** secure-session needs a 32-byte key; derive it deterministically from the secret. */
@@ -36,6 +39,12 @@ export const buildServer = (deps: ServerDeps): FastifyInstance => {
   app.register(fastifyCookie)
   app.register(fastifyFormbody)
   app.register(fastifySecureSession, { key: sessionKey(deps.sessionSecret) })
+
+  registerAuthRoutes(app, {
+    db: deps.db,
+    github: deps.github,
+    publicUrl: deps.publicUrl,
+  })
 
   app.all('/mcp', async (request, reply) => {
     const userId = await resolveToken(deps.db, request.headers.authorization, deps.now)

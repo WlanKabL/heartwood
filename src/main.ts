@@ -13,6 +13,8 @@ const server = buildServer({
   workflowStore: new PostgresWorkflowStore(db),
   now: () => new Date(),
   sessionSecret: config.sessionSecret,
+  github: config.github,
+  publicUrl: config.publicUrl,
 })
 
 server

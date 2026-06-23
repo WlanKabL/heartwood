@@ -34,6 +34,8 @@ const startServer = async (): Promise<URL> => {
     workflowStore: new PostgresWorkflowStore(db),
     now: fixedNow,
     sessionSecret: SESSION_SECRET,
+    github: { clientId: 'dummy-client-id', clientSecret: 'dummy-client-secret' },
+    publicUrl: 'http://localhost:8722',
   })
   await app.listen({ port: 0, host: '127.0.0.1' })
   running = app
