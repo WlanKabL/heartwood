@@ -95,6 +95,65 @@ const contract = (name: string, make: () => TreeRepository): void => {
     it('rejects deleting an unknown node', async () => {
       await expect(make().deleteNode('ghost')).rejects.toThrow(/unknown/)
     })
+
+    it('listTreeSummaries returns counts per tree', async () => {
+      const repo = make()
+      await repo.insertNode(node('r1', null))
+      await repo.insertNode(node('r2', null, { treeId: 't2' }))
+      await repo.insertNode(node('r3', null, { treeId: 't2' }))
+      const summaries = (await repo.listTreeSummaries()).sort((a, b) => a.treeId.localeCompare(b.treeId))
+      expect(summaries).toEqual([
+        { treeId: 't1', nodeCount: 1 },
+        { treeId: 't2', nodeCount: 2 },
+      ])
+    })
+
+    it('listTreeSummaries returns empty array when user has no nodes', async () => {
+      expect(await make().listTreeSummaries()).toEqual([])
+    })
+
+    it('deleteTree removes all nodes in the tree and returns the count', async () => {
+      const repo = make()
+      await repo.insertNode(node('r1', null))
+      await repo.insertNode(node('r2', null, { treeId: 't2' }))
+      const removed = await repo.deleteTree('t1')
+      expect(removed).toBe(1)
+      expect(await repo.listNodes('t1')).toHaveLength(0)
+      expect(await repo.listNodes('t2')).toHaveLength(1)
+    })
+
+    it('deleteTree returns 0 when the tree does not exist', async () => {
+      expect(await make().deleteTree('nonexistent')).toBe(0)
+    })
+
+    it('searchNodes matches by label case-insensitively', async () => {
+      const repo = make()
+      await repo.insertNode(node('r', null, { label: 'Identity', content: 'irrelevant' }))
+      await repo.insertNode(node('a', 'r', { label: 'voice', content: 'something else' }))
+      const hits = await repo.searchNodes('t1', 'IDENT')
+      expect(hits.map((n) => n.id)).toEqual(['r'])
+    })
+
+    it('searchNodes matches by content case-insensitively', async () => {
+      const repo = make()
+      await repo.insertNode(node('r', null, { content: 'The Portable Animal Record' }))
+      const hits = await repo.searchNodes('t1', 'portable')
+      expect(hits.map((n) => n.id)).toEqual(['r'])
+    })
+
+    it('searchNodes returns empty when no match', async () => {
+      const repo = make()
+      await repo.insertNode(node('r', null, { label: 'identity', content: 'nothing here' }))
+      expect(await repo.searchNodes('t1', 'zzznomatch')).toHaveLength(0)
+    })
+
+    it('searchNodes is scoped to the requested treeId', async () => {
+      const repo = make()
+      await repo.insertNode(node('r1', null, { treeId: 't1', label: 'identity', content: 'x' }))
+      await repo.insertNode(node('r2', null, { treeId: 't2', label: 'identity', content: 'x' }))
+      const hits = await repo.searchNodes('t1', 'identity')
+      expect(hits.map((n) => n.id)).toEqual(['r1'])
+    })
   })
 }
 
@@ -166,6 +225,40 @@ describe('InMemoryTreeStore: cross-tenant isolation', () => {
 
     expect(await repoA.listTreeIds()).toEqual(['tree-a'])
     expect(await repoB.listTreeIds()).toEqual(['tree-b'])
+  })
+
+  it('listTreeSummaries does not include trees belonging to another user', async () => {
+    const store = new InMemoryTreeStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.insertNode(node('a1', null, { treeId: 'tree-a' }))
+    await repoB.insertNode(node('b1', null, { treeId: 'tree-b' }))
+
+    const summariesA = await repoA.listTreeSummaries()
+    expect(summariesA.map((s) => s.treeId)).toEqual(['tree-a'])
+    const summariesB = await repoB.listTreeSummaries()
+    expect(summariesB.map((s) => s.treeId)).toEqual(['tree-b'])
+  })
+
+  it('deleteTree from user-b does not remove user-a nodes', async () => {
+    const store = new InMemoryTreeStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.insertNode(node('a1', null, { treeId: 'tree-a' }))
+    const removed = await repoB.deleteTree('tree-a')
+    expect(removed).toBe(0)
+    expect(await repoA.listNodes('tree-a')).toHaveLength(1)
+  })
+
+  it('searchNodes from user-b returns nothing for user-a tree', async () => {
+    const store = new InMemoryTreeStore()
+    const repoA = store.forUser('user-a')
+    const repoB = store.forUser('user-b')
+
+    await repoA.insertNode(node('a1', null, { treeId: 't1', label: 'identity', content: 'x' }))
+    expect(await repoB.searchNodes('t1', 'identity')).toHaveLength(0)
   })
 })
 
@@ -247,5 +340,39 @@ describe('PostgresTreeStore: cross-tenant isolation', () => {
 
     expect(await repoA.listTreeIds()).toEqual(['tree-a'])
     expect(await repoB.listTreeIds()).toEqual(['tree-b'])
+  })
+
+  it('listTreeSummaries does not include trees belonging to another user', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('a1', null, { treeId: 'tree-a' }))
+    await repoB.insertNode(node('b1', null, { treeId: 'tree-b' }))
+
+    const summariesA = await repoA.listTreeSummaries()
+    expect(summariesA.map((s) => s.treeId)).toEqual(['tree-a'])
+    const summariesB = await repoB.listTreeSummaries()
+    expect(summariesB.map((s) => s.treeId)).toEqual(['tree-b'])
+  })
+
+  it('deleteTree from userB does not remove userA nodes', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('a1', null, { treeId: 'tree-a' }))
+    const removed = await repoB.deleteTree('tree-a')
+    expect(removed).toBe(0)
+    expect(await repoA.listNodes('tree-a')).toHaveLength(1)
+  })
+
+  it('searchNodes from userB returns nothing for userA tree', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('a1', null, { treeId: 't1', label: 'identity', content: 'x' }))
+    expect(await repoB.searchNodes('t1', 'identity')).toHaveLength(0)
   })
 })

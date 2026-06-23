@@ -114,13 +114,16 @@ describe('http + mcp end to end', () => {
       'create_node',
       'define_workflow',
       'delete_node',
+      'delete_tree',
       'delete_workflow',
       'get_roots',
       'get_subtree',
       'get_tree',
+      'list_trees',
       'list_workflows',
       'move_node',
       'run_workflow',
+      'search_truths',
       'update_node',
     ])
     await client.close()
@@ -251,6 +254,144 @@ describe('http + mcp end to end', () => {
     const text = built.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
     expect(text).toContain('the one truth')
     await client.close()
+  })
+
+  it('list_trees returns summaries scoped to the authenticated user', async () => {
+    const url = await startServer()
+    const clientA = await connect(url, tokenA)
+    const clientB = await connect(url, tokenB)
+
+    await clientA.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'tree-a', parentId: null, label: 'root', content: 'a truth' },
+    })
+    await clientA.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'tree-a2', parentId: null, label: 'root2', content: 'another' },
+    })
+    await clientB.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'tree-b', parentId: null, label: 'root-b', content: 'b truth' },
+    })
+
+    const SummaryList = z.array(z.object({ treeId: z.string(), nodeCount: z.number() }))
+    const rawA = JSON.parse(textOf(await clientA.callTool({ name: 'list_trees', arguments: {} })))
+    const summariesA = SummaryList.parse(rawA).sort((a, b) => a.treeId.localeCompare(b.treeId))
+    expect(summariesA).toEqual([
+      { treeId: 'tree-a', nodeCount: 1 },
+      { treeId: 'tree-a2', nodeCount: 1 },
+    ])
+
+    const rawB = JSON.parse(textOf(await clientB.callTool({ name: 'list_trees', arguments: {} })))
+    const summariesB = SummaryList.parse(rawB)
+    expect(summariesB).toEqual([{ treeId: 'tree-b', nodeCount: 1 }])
+
+    await clientA.close()
+    await clientB.close()
+  })
+
+  it('delete_tree shows preview without confirm, then deletes with confirm', async () => {
+    const url = await startServer()
+    const client = await connect(url, tokenA)
+
+    await client.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'dt-tree', parentId: null, label: 'root', content: 'to be deleted' },
+    })
+
+    const preview = z
+      .object({ requiresConfirmation: z.literal(true), treeId: z.string(), nodeCount: z.number() })
+      .parse(JSON.parse(textOf(await client.callTool({ name: 'delete_tree', arguments: { treeId: 'dt-tree' } }))))
+    expect(preview.requiresConfirmation).toBe(true)
+    expect(preview.treeId).toBe('dt-tree')
+    expect(preview.nodeCount).toBe(1)
+
+    const deleted = z
+      .object({ deleted: z.string(), removed: z.number() })
+      .parse(
+        JSON.parse(textOf(await client.callTool({ name: 'delete_tree', arguments: { treeId: 'dt-tree', confirm: true } }))),
+      )
+    expect(deleted.deleted).toBe('dt-tree')
+    expect(deleted.removed).toBe(1)
+
+    const forest = parseForest(await client.callTool({ name: 'get_tree', arguments: { treeId: 'dt-tree' } }))
+    expect(forest).toHaveLength(0)
+
+    await client.close()
+  })
+
+  it('delete_tree scoped: userB cannot delete userA tree', async () => {
+    const url = await startServer()
+    const clientA = await connect(url, tokenA)
+    const clientB = await connect(url, tokenB)
+
+    await clientA.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'iso-tree', parentId: null, label: 'root', content: 'stay alive' },
+    })
+
+    const result = z
+      .object({ deleted: z.string(), removed: z.number() })
+      .parse(
+        JSON.parse(
+          textOf(await clientB.callTool({ name: 'delete_tree', arguments: { treeId: 'iso-tree', confirm: true } })),
+        ),
+      )
+    expect(result.removed).toBe(0)
+
+    const forest = parseForest(await clientA.callTool({ name: 'get_tree', arguments: { treeId: 'iso-tree' } }))
+    expect(forest).toHaveLength(1)
+
+    await clientA.close()
+    await clientB.close()
+  })
+
+  it('search_truths finds matching nodes with resolved hardness', async () => {
+    const url = await startServer()
+    const client = await connect(url, tokenA)
+
+    await client.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'st-tree', parentId: null, label: 'identity', content: 'portable animal record' },
+    })
+    await client.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'st-tree', parentId: null, label: 'voice', content: 'calm and direct' },
+    })
+
+    const SearchResult = z.array(z.object({ id: z.string(), label: z.string(), effectiveHardness: z.number(), protected: z.boolean() }))
+    const hits = SearchResult.parse(
+      JSON.parse(textOf(await client.callTool({ name: 'search_truths', arguments: { treeId: 'st-tree', query: 'portable' } }))),
+    )
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.label).toBe('identity')
+    expect(typeof hits[0]?.effectiveHardness).toBe('number')
+    expect(hits[0]?.protected).toBe(true)
+
+    await client.close()
+  })
+
+  it('search_truths scoped: userB gets no results for userA tree', async () => {
+    const url = await startServer()
+    const clientA = await connect(url, tokenA)
+    const clientB = await connect(url, tokenB)
+
+    await clientA.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'search-iso', parentId: null, label: 'identity', content: 'secret truth' },
+    })
+
+    const hitsB = z
+      .array(z.object({ id: z.string() }))
+      .parse(
+        JSON.parse(
+          textOf(await clientB.callTool({ name: 'search_truths', arguments: { treeId: 'search-iso', query: 'secret' } })),
+        ),
+      )
+    expect(hitsB).toHaveLength(0)
+
+    await clientA.close()
+    await clientB.close()
   })
 
   it('defines a custom workflow and runs it with truths filled in', async () => {

@@ -17,6 +17,11 @@ export interface TreeStore {
  * Every instance is already bound to a single user. Callers never pass userId;
  * the implementation stamps ownership on insert and filters every read/write by it.
  */
+export interface TreeSummary {
+  treeId: string
+  nodeCount: number
+}
+
 export interface TreeRepository {
   listNodes(treeId: string): Promise<TreeNode[]>
   getNode(id: string): Promise<TreeNode | undefined>
@@ -24,6 +29,12 @@ export interface TreeRepository {
   updateNode(node: TreeNode): Promise<void>
   deleteNode(id: string): Promise<void>
   listTreeIds(): Promise<string[]>
+  /** Summaries for all trees owned by the bound user: treeId + node count. */
+  listTreeSummaries(): Promise<TreeSummary[]>
+  /** Delete every node in a tree for the bound user. Returns the number removed. */
+  deleteTree(treeId: string): Promise<number>
+  /** Case-insensitive substring search across label + content for the bound user in one tree. */
+  searchNodes(treeId: string, query: string): Promise<TreeNode[]>
 }
 
 /**
@@ -74,6 +85,38 @@ class BoundInMemoryTreeRepository implements TreeRepository {
           .map((entry) => entry.node.treeId),
       ),
     ]
+  }
+
+  async listTreeSummaries(): Promise<TreeSummary[]> {
+    const counts = new Map<string, number>()
+    for (const entry of this.store.values()) {
+      if (entry.userId !== this.userId) continue
+      counts.set(entry.node.treeId, (counts.get(entry.node.treeId) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([treeId, nodeCount]) => ({ treeId, nodeCount }))
+  }
+
+  async deleteTree(treeId: string): Promise<number> {
+    let removed = 0
+    for (const [key, entry] of this.store.entries()) {
+      if (entry.userId === this.userId && entry.node.treeId === treeId) {
+        this.store.delete(key)
+        removed++
+      }
+    }
+    return removed
+  }
+
+  async searchNodes(treeId: string, query: string): Promise<TreeNode[]> {
+    const q = query.toLowerCase()
+    return [...this.store.values()]
+      .filter(
+        (entry) =>
+          entry.userId === this.userId &&
+          entry.node.treeId === treeId &&
+          (entry.node.label.toLowerCase().includes(q) || entry.node.content.toLowerCase().includes(q)),
+      )
+      .map((entry) => entry.node)
   }
 }
 

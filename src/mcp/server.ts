@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { TreeRepository } from '../core/repository.js'
-import { getResolvedTree, getResolvedSubtree, getProtectedNodes } from '../core/service.js'
+import { getResolvedTree, getResolvedSubtree, getProtectedNodes, listTreeSummaries, deleteTree, searchTruths } from '../core/service.js'
 import { createNode } from '../core/create.js'
 import { updateNode, moveNode, deleteNode } from '../core/write.js'
 import { registerWorkflows } from './workflows.js'
@@ -201,6 +201,67 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
             now(),
           ),
         )
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'list_trees',
+    {
+      description:
+        'List your trees and how many truths each holds. Use this first when you do not know which treeId to read.',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return ok(await listTreeSummaries(deps.repo))
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'delete_tree',
+    {
+      description:
+        'Delete an entire tree and all its truths. This is irreversible. Without confirm: true the tool returns a preview showing how many nodes would be removed. Pass confirm: true only after the user has approved.',
+      inputSchema: {
+        treeId: z.string(),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async ({ treeId, confirm }) => {
+      try {
+        if (!confirm) {
+          const summaries = await listTreeSummaries(deps.repo)
+          const summary = summaries.find((s) => s.treeId === treeId)
+          const nodeCount = summary?.nodeCount ?? 0
+          return ok({ requiresConfirmation: true, treeId, nodeCount })
+        }
+        const removed = await deleteTree(deps.repo, treeId)
+        return ok({ deleted: treeId, removed })
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'search_truths',
+    {
+      description:
+        'Find truths in a tree by keyword, for when the tree is too big to read whole. Returns matching nodes with their server-computed effectiveHardness and protected flag, the same shape as get_tree nodes.',
+      inputSchema: {
+        treeId: z.string(),
+        query: z.string().min(1),
+      },
+    },
+    async ({ treeId, query }) => {
+      try {
+        return ok(await searchTruths(deps.repo, treeId, query, now()))
       } catch (error) {
         return fail(error)
       }

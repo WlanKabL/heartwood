@@ -1,7 +1,7 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, ilike, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { TreeNode } from '../core/types.js'
-import type { TreeStore, TreeRepository } from '../core/repository.js'
+import type { TreeStore, TreeRepository, TreeSummary } from '../core/repository.js'
 import type { Db } from './db.js'
 import { nodes } from './schema.js'
 
@@ -119,6 +119,37 @@ class PostgresTreeRepository implements TreeRepository {
       .from(nodes)
       .where(eq(nodes.userId, this.userId))
     return rows.map((r) => r.treeId)
+  }
+
+  async listTreeSummaries(): Promise<TreeSummary[]> {
+    const rows = await this.db
+      .select({ treeId: nodes.treeId, nodeCount: sql<number>`cast(count(*) as integer)` })
+      .from(nodes)
+      .where(eq(nodes.userId, this.userId))
+      .groupBy(nodes.treeId)
+    return rows.map((r) => ({ treeId: r.treeId, nodeCount: r.nodeCount }))
+  }
+
+  async deleteTree(treeId: string): Promise<number> {
+    const result = await this.db
+      .delete(nodes)
+      .where(and(eq(nodes.userId, this.userId), eq(nodes.treeId, treeId)))
+    return result.rowCount ?? 0
+  }
+
+  async searchNodes(treeId: string, query: string): Promise<TreeNode[]> {
+    const pattern = `%${query}%`
+    const rows = await this.db
+      .select()
+      .from(nodes)
+      .where(
+        and(
+          eq(nodes.userId, this.userId),
+          eq(nodes.treeId, treeId),
+          or(ilike(nodes.label, pattern), ilike(nodes.content, pattern)),
+        ),
+      )
+    return rows.map(rowToNode)
   }
 }
 
