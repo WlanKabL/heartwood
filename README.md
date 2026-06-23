@@ -68,4 +68,4 @@ Changing a hard node is blocked until a human confirms **with the cascade shown*
 
 ## Status
 
-Concept, Phase 0. First dogfood tree: KeeperLog. See [ROADMAP.md](ROADMAP.md).
+Phase 1 in progress. The core engine, storage and a local HTTP MCP server with bearer-token auth are built and tested (58 tests). See [docs/usage.md](docs/usage.md) to run it and connect it to Claude Code, and [ROADMAP.md](ROADMAP.md) for what is next.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TreeNode } from './types.js'
 import { InMemoryTreeRepository } from './repository.js'
-import { getResolvedTree, getResolvedSubtree } from './service.js'
+import { getResolvedTree, getResolvedSubtree, getProtectedNodes } from './service.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
 const NOW = new Date(STAMP)
@@ -56,5 +56,13 @@ describe('service over InMemoryTreeRepository', () => {
   it('rejects duplicate inserts', async () => {
     const repo = await seed(node('r', null))
     await expect(repo.insertNode(node('r', null))).rejects.toThrow(/duplicate/)
+  })
+
+  it('returns only nodes above the protection threshold, flattened', async () => {
+    const repo = await seed(node('r', null), node('a', 'r'), node('deep', 'a'))
+    const core = await getProtectedNodes(repo, 't1', NOW)
+    expect(core.every((n) => n.children.length === 0)).toBe(true)
+    expect(core.some((n) => n.id === 'r')).toBe(true)
+    expect(core.some((n) => n.id === 'deep')).toBe(false)
   })
 })

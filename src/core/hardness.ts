@@ -11,6 +11,9 @@ import type { HardnessInput, HardnessResult, HardnessBand } from './types.js'
  * Constants are v1 and tunable; behaviour is pinned by tests, exact numbers are free.
  */
 
+/** At or above this effective hardness a node is protected: changing it needs explicit human confirmation. */
+export const PROTECTION_THRESHOLD = 60
+
 const CLOSENESS_DECAY = 0.7 // each level away from the root keeps 70% of closeness
 const DESCENDANT_BONUS_CAP = 25 // load-bearing can add at most this much
 const DESCENDANT_BONUS_SCALE = 8
