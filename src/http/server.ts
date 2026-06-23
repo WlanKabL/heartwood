@@ -12,6 +12,7 @@ import type { TreeStore } from '../core/repository.js'
 import type { WorkflowStore } from '../core/workflow-repository.js'
 import { registerAuthRoutes } from './auth-routes.js'
 import { registerApiRoutes } from './api-routes.js'
+import { registerTreeRoutes } from './tree-routes.js'
 import { registerPages } from './pages.js'
 
 export interface ServerDeps {
@@ -57,6 +58,8 @@ export const buildServer = (deps: ServerDeps): FastifyInstance => {
   })
 
   registerApiRoutes(app, { db: deps.db })
+
+  registerTreeRoutes(app, { treeStore: deps.treeStore, now: deps.now })
 
   registerPages(app, { db: deps.db })
 
