@@ -13,7 +13,7 @@ const SESSION_SECRET = 'test-secret-must-be-at-least-32-characters'
 setupPostgresTests()
 
 describe('completeGithubLogin', () => {
-  it('creates the user, sets the session, and redirects to /', async () => {
+  it('creates the user, sets the session, and redirects to /app', async () => {
     const db = getDb()
 
     const app = Fastify()
@@ -40,7 +40,7 @@ describe('completeGithubLogin', () => {
     // Trigger the login.
     const loginRes = await app.inject({ method: 'GET', url: '/test-login' })
     expect(loginRes.statusCode).toBe(302)
-    expect(loginRes.headers['location']).toBe('/')
+    expect(loginRes.headers['location']).toBe('/app')
 
     // The Set-Cookie header must be present.
     const rawCookie = loginRes.headers['set-cookie']

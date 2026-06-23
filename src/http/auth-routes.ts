@@ -91,7 +91,7 @@ export const completeGithubLogin = async (
 ): Promise<void> => {
   const userId = await findOrCreateGithubUser(db, profile)
   setUserSession(reply, userId)
-  await reply.redirect('/')
+  await reply.redirect('/app')
 }
 
 /**
