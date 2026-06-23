@@ -166,3 +166,225 @@ describe('GET /api/trees/:treeId/search', () => {
     await app.close()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Write endpoints
+// ---------------------------------------------------------------------------
+
+interface NodeBody {
+  id: string
+  label: string
+  content: string
+  protected: boolean
+  parentId: string | null
+  depthFromRoot: number
+}
+const createNodeReq = async (
+  app: ReturnType<typeof buildApp>,
+  cookie: string,
+  treeId: string,
+  body: { parentId: string | null; label: string; content: string; hardnessSet?: number | null },
+): Promise<{ node: NodeBody }> => {
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/trees/${treeId}/nodes`,
+    headers: { cookie, 'content-type': 'application/json' },
+    payload: body,
+  })
+  return res.json<{ node: NodeBody }>()
+}
+
+describe('POST /api/trees/:treeId/nodes', () => {
+  it('creates a root (protected) and a nested child', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+
+    const rootRes = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/nodes',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { parentId: null, label: 'identity', content: 'the core truth' },
+    })
+    expect(rootRes.statusCode).toBe(200)
+    const root = rootRes.json<{ node: NodeBody }>()
+    expect(root.node.label).toBe('identity')
+    expect(root.node.protected).toBe(true)
+
+    const child = await createNodeReq(app, cookie, 'kl', {
+      parentId: root.node.id,
+      label: 'detail',
+      content: 'a detail',
+    })
+    expect(child.node.parentId).toBe(root.node.id)
+    await app.close()
+  })
+
+  it('returns 404 when the parent does not exist', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/nodes',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { parentId: 'missing', label: 'x', content: 'y' },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('returns 401 without a session', async () => {
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/nodes',
+      headers: { 'content-type': 'application/json' },
+      payload: { parentId: null, label: 'x', content: 'y' },
+    })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+})
+
+describe('PATCH /api/trees/:treeId/nodes/:nodeId', () => {
+  it('edits a soft leaf directly', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const root = await createNodeReq(app, cookie, 'kl', { parentId: null, label: 'r', content: 'root' })
+    const branch = await createNodeReq(app, cookie, 'kl', { parentId: root.node.id, label: 'b', content: 'branch' })
+    const leaf = await createNodeReq(app, cookie, 'kl', { parentId: branch.node.id, label: 'l', content: 'leaf' })
+    expect(leaf.node.protected).toBe(false)
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/trees/kl/nodes/${leaf.node.id}`,
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { content: 'edited leaf' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json<{ node: NodeBody }>().node.content).toBe('edited leaf')
+    await app.close()
+  })
+
+  it('returns a cascade preview for a protected node, then applies with confirm', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const root = await createNodeReq(app, cookie, 'kl', { parentId: null, label: 'identity', content: 'orig' })
+    await createNodeReq(app, cookie, 'kl', { parentId: root.node.id, label: 'c', content: 'child' })
+
+    const preview = await app.inject({
+      method: 'PATCH',
+      url: `/api/trees/kl/nodes/${root.node.id}`,
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { content: 'new core' },
+    })
+    expect(preview.statusCode).toBe(200)
+    const previewBody = preview.json<{ requiresConfirmation?: boolean; affected?: unknown[] }>()
+    expect(previewBody.requiresConfirmation).toBe(true)
+    expect(Array.isArray(previewBody.affected)).toBe(true)
+
+    const confirmed = await app.inject({
+      method: 'PATCH',
+      url: `/api/trees/kl/nodes/${root.node.id}`,
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { content: 'new core', confirm: true },
+    })
+    expect(confirmed.statusCode).toBe(200)
+    expect(confirmed.json<{ node: NodeBody }>().node.content).toBe('new core')
+    await app.close()
+  })
+})
+
+describe('move + delete', () => {
+  it('moves a soft leaf under a new parent', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const root = await createNodeReq(app, cookie, 'kl', { parentId: null, label: 'r', content: 'root' })
+    const branch = await createNodeReq(app, cookie, 'kl', { parentId: root.node.id, label: 'b', content: 'branch' })
+    const leaf = await createNodeReq(app, cookie, 'kl', { parentId: branch.node.id, label: 'l', content: 'leaf' })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/trees/kl/nodes/${leaf.node.id}/move`,
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { newParentId: root.node.id },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json<NodeBody>().parentId).toBe(root.node.id)
+    await app.close()
+  })
+
+  it('previews then deletes a node with descendants', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const root = await createNodeReq(app, cookie, 'kl', { parentId: null, label: 'r', content: 'root' })
+    const branch = await createNodeReq(app, cookie, 'kl', { parentId: root.node.id, label: 'b', content: 'branch' })
+    await createNodeReq(app, cookie, 'kl', { parentId: branch.node.id, label: 'l', content: 'leaf' })
+
+    const preview = await app.inject({
+      method: 'DELETE',
+      url: `/api/trees/kl/nodes/${branch.node.id}`,
+      headers: { cookie },
+    })
+    expect(preview.json<{ requiresConfirmation?: boolean }>().requiresConfirmation).toBe(true)
+
+    const done = await app.inject({
+      method: 'DELETE',
+      url: `/api/trees/kl/nodes/${branch.node.id}?confirm=true`,
+      headers: { cookie },
+    })
+    expect(done.statusCode).toBe(200)
+    expect(done.json<{ deleted: string[] }>().deleted.length).toBe(2)
+    await app.close()
+  })
+})
+
+describe('DELETE /api/trees/:treeId', () => {
+  it('previews without confirm, deletes with confirm', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    await createNodeReq(app, cookie, 'kl', { parentId: null, label: 'r', content: 'root' })
+
+    const preview = await app.inject({ method: 'DELETE', url: '/api/trees/kl', headers: { cookie } })
+    const pb = preview.json<{ requiresConfirmation?: boolean; nodeCount?: number }>()
+    expect(pb.requiresConfirmation).toBe(true)
+    expect(pb.nodeCount).toBe(1)
+
+    const done = await app.inject({ method: 'DELETE', url: '/api/trees/kl?confirm=true', headers: { cookie } })
+    expect(done.json<{ removed: number }>().removed).toBe(1)
+
+    const after = await app.inject({ method: 'GET', url: '/api/trees', headers: { cookie } })
+    expect(after.json()).toEqual([])
+    await app.close()
+  })
+})
+
+describe('write isolation', () => {
+  it('user B cannot edit user A node and A is unchanged', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookieA = await loginAs(app, getUserA())
+    const a = await createNodeReq(app, cookieA, 'kl', { parentId: null, label: 'a', content: 'a-original' })
+
+    const cookieB = await loginAs(app, getUserB())
+    const attempt = await app.inject({
+      method: 'PATCH',
+      url: `/api/trees/kl/nodes/${a.node.id}`,
+      headers: { cookie: cookieB, 'content-type': 'application/json' },
+      payload: { content: 'hijacked', confirm: true },
+    })
+    expect(attempt.statusCode).toBe(404)
+
+    const after = await app.inject({ method: 'GET', url: '/api/trees/kl', headers: { cookie: cookieA } })
+    const forest = after.json<{ content: string }[]>()
+    expect(forest[0]!.content).toBe('a-original')
+    await app.close()
+  })
+})
