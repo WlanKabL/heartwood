@@ -32,6 +32,7 @@ export const registerWorkflows = (server: McpServer, deps: McpDeps): void => {
           `You are authoring the Heartwood truth tree for "${treeId}". A tree holds the stable truths about anything: a brand, a person, a company, a project.`,
           '',
           'Rules for a coherent tree:',
+          '- Add only durable truths. If something changes often (a price, a metric, a percentage, a date, a current number), it does not belong in the tree; put it in a decision-record instead. Ask: would this be wrong in a few months?',
           '- One node is one truth. Do not pack several claims into one node.',
           '- Roots are the few things that almost never change. A tree may have several roots; give a distinct theme its own root rather than overloading another.',
           '- Keep sibling nodes at a similar level of detail.',

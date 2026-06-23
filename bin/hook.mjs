@@ -30,11 +30,20 @@ try {
 
   if (lines.length === 0) done()
 
+  const rules = [
+    '',
+    '## Maintaining this tree',
+    '- Add only DURABLE truths. If something changes often (a price, a metric, a percentage, a date, a current number), it does NOT belong here; put it in a decision-record document instead.',
+    '- One node is one truth. Give a distinct theme its own root rather than overloading another.',
+    '- Protected truths above are authoritative: do not contradict or change them without explicit human confirmation (confirm: true).',
+  ]
+
   process.stdout.write(
     `# Project truths (Heartwood: ${treeId})\n` +
       'These are the protected, load-bearing truths of this project. Treat them as authoritative. ' +
       'Do not contradict them without explicit human confirmation.\n\n' +
-      `${lines.join('\n')}\n`,
+      `${lines.join('\n')}\n` +
+      `${rules.join('\n')}\n`,
   )
 } catch {
   done()

@@ -84,7 +84,7 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
       description: [
         'Add a truth to a tree. Set parentId to an existing node id to nest it, or null to start a new root; several roots are allowed.',
         'Hardness is decided by the server from the node position: a proposed hardnessSet is clamped into the structurally allowed band and can never exceed it.',
-        'Structure guidance: one node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent.',
+        'Structure guidance: add only DURABLE truths. If the content would be wrong in a few months (a price, a metric, a percentage, a current number), it belongs in a decision-record document, not in the tree. One node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent.',
       ].join(' '),
       inputSchema: {
         treeId: z.string(),
