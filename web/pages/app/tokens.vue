@@ -11,6 +11,25 @@ const revealed = ref<{ name: string; raw: string } | null>(null)
 const copied = ref(false)
 const errorMsg = ref('')
 
+const mcpSnippet = `{
+  "mcpServers": {
+    "heartwood": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp",
+      "headers": { "Authorization": "Bearer hw_your-token" }
+    }
+  }
+}`
+
+const hookSnippet = `{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command",
+        "command": "curl -s -H \\"Authorization: Bearer hw_your-token\\" http://localhost:3000/trees/keeperlog/roots" } ] }
+    ]
+  }
+}`
+
 const load = async (): Promise<void> => {
   loading.value = true
   try {
@@ -138,6 +157,55 @@ const copy = async (): Promise<void> => {
           </button>
         </li>
       </ul>
+    </div>
+
+    <!-- connect -->
+    <div class="mt-16 border-t-[1.5px] border-ink pt-8">
+      <p class="kicker text-rust">connect your agent</p>
+      <h2 class="mt-2 font-serif text-3xl font-medium tracking-tight">Wire it into MCP</h2>
+      <p class="mt-2 max-w-xl text-ink-2">
+        Drop the token into your agent's MCP config, then open a fresh session. Swap the host for
+        your deployed URL in production.
+      </p>
+
+      <ol class="mt-8 space-y-8">
+        <li>
+          <div class="flex items-baseline gap-3">
+            <span class="font-mono text-[0.8rem] text-rust">01</span>
+            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Add the server</h3>
+          </div>
+          <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
+            In your project's <code class="font-mono text-[0.85em]">.mcp.json</code> (or
+            <code class="font-mono text-[0.85em]">~/.claude.json</code>):
+          </p>
+          <pre
+            class="ml-7 mt-3 max-w-2xl overflow-x-auto rounded-sm border border-line bg-paper-2 p-4 font-mono text-[0.76rem] leading-relaxed text-ink"
+          ><code>{{ mcpSnippet }}</code></pre>
+        </li>
+        <li>
+          <div class="flex items-baseline gap-3">
+            <span class="font-mono text-[0.8rem] text-rust">02</span>
+            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Auto-load your roots</h3>
+          </div>
+          <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
+            Point a SessionStart hook at your protected core, so every new chat loads it first.
+            In <code class="font-mono text-[0.85em]">.claude/settings.local.json</code>:
+          </p>
+          <pre
+            class="ml-7 mt-3 max-w-2xl overflow-x-auto rounded-sm border border-line bg-paper-2 p-4 font-mono text-[0.76rem] leading-relaxed text-ink"
+          ><code>{{ hookSnippet }}</code></pre>
+        </li>
+        <li>
+          <div class="flex items-baseline gap-3">
+            <span class="font-mono text-[0.8rem] text-rust">03</span>
+            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Open a new session</h3>
+          </div>
+          <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
+            MCP servers load at session start. Start a fresh chat and your agent can read and
+            grow the tree.
+          </p>
+        </li>
+      </ol>
     </div>
   </section>
 </template>
