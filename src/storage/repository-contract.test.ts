@@ -3,6 +3,8 @@ import type { TreeNode } from '../core/types.js'
 import type { TreeRepository } from '../core/repository.js'
 import { InMemoryTreeStore } from '../core/repository.js'
 import { SqliteTreeRepository } from './sqlite.js'
+import { PostgresTreeStore } from './postgres-trees.js'
+import { setupPostgresTests, getDb, getUserA, getUserB } from './postgres-test-setup.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
 
@@ -160,6 +162,87 @@ describe('InMemoryTreeStore: cross-tenant isolation', () => {
     const store = new InMemoryTreeStore()
     const repoA = store.forUser('user-a')
     const repoB = store.forUser('user-b')
+
+    await repoA.insertNode(node('a1', null, { treeId: 'tree-a' }))
+    await repoB.insertNode(node('b1', null, { treeId: 'tree-b' }))
+
+    expect(await repoA.listTreeIds()).toEqual(['tree-a'])
+    expect(await repoB.listTreeIds()).toEqual(['tree-b'])
+  })
+})
+
+// ── Postgres contract + isolation ────────────────────────────────────────────
+
+setupPostgresTests()
+
+/**
+ * A factory that uses the live Postgres db and the current test user id.
+ * Must be called inside a test (after beforeAll/beforeEach ran).
+ */
+const makePostgresRepo = (userGetter: () => string): (() => TreeRepository) => {
+  return () => new PostgresTreeStore(getDb()).forUser(userGetter())
+}
+
+contract('Postgres (userA)', makePostgresRepo(getUserA))
+
+describe('PostgresTreeStore: cross-tenant isolation', () => {
+  it('a node inserted by userA is not visible to userB via listNodes', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('n1', null))
+    expect(await repoB.listNodes('t1')).toHaveLength(0)
+  })
+
+  it('a node inserted by userA is not visible to userB via getNode', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('n1', null))
+    expect(await repoB.getNode('n1')).toBeUndefined()
+  })
+
+  it('updateNode of userA node from userB throws unknown-id', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('n1', null))
+    await expect(repoB.updateNode(node('n1', null, { content: 'hijacked' }))).rejects.toThrow(/unknown/)
+  })
+
+  it('deleteNode of userA node from userB throws unknown-id', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('n1', null))
+    await expect(repoB.deleteNode('n1')).rejects.toThrow(/unknown/)
+  })
+
+  it('two users can each have a tree named "keeperlog" without collision', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
+
+    await repoA.insertNode(node('a-root', null, { treeId: 'keeperlog', content: 'user-a truth' }))
+    await repoB.insertNode(node('b-root', null, { treeId: 'keeperlog', content: 'user-b truth' }))
+
+    const aNodes = await repoA.listNodes('keeperlog')
+    const bNodes = await repoB.listNodes('keeperlog')
+
+    expect(aNodes).toHaveLength(1)
+    expect(aNodes[0]?.content).toBe('user-a truth')
+    expect(bNodes).toHaveLength(1)
+    expect(bNodes[0]?.content).toBe('user-b truth')
+  })
+
+  it('listTreeIds only returns tree ids belonging to the bound user', async () => {
+    const store = new PostgresTreeStore(getDb())
+    const repoA = store.forUser(getUserA())
+    const repoB = store.forUser(getUserB())
 
     await repoA.insertNode(node('a1', null, { treeId: 'tree-a' }))
     await repoB.insertNode(node('b1', null, { treeId: 'tree-b' }))
