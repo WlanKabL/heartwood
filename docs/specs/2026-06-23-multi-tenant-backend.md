@@ -155,6 +155,15 @@ complete. The polished SPA is sub-project 2.
 - OAuth flow tested with the GitHub API mocked.
 - The existing core tests stay green unchanged; only the wiring moves.
 
+## Existing data
+
+The local SQLite DB holds the dogfood `keeperlog` tree (~52 nodes), currently being
+restructured in a parallel session. The Postgres switch must not silently drop it. A
+one-off import script reads the existing SQLite file and inserts its nodes and workflows
+under the founder's account (the first user created via OAuth) in Postgres. The script is
+idempotent and optional: if the tree is rebuilt from scratch instead, it is simply not
+run. No already-applied migration file is ever edited.
+
 ## Out-of-scope reminders
 
 - No `password` / `magic_link` implementation yet (model only).
