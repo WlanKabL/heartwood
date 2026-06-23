@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { CascadePreview, ResolvedNode } from '~/types/tree'
+import type { ResolvedNode } from '~/types/tree'
 import { hardnessColor, isCascadePreview } from '~/types/tree'
+import type { ConfirmState } from '~/components/app/ConfirmDialog.vue'
 import {
   createTreeNode,
   updateTreeNode,
@@ -27,8 +28,9 @@ const addHardness = ref('')
 
 const moveTarget = ref<string | null>(null)
 
-const pendingPreview = ref<CascadePreview | null>(null)
-let pendingAction: (() => Promise<void>) | null = null
+// Every mutating action routes through this confirm gate. No request is sent until confirmed.
+const confirmState = ref<ConfirmState | null>(null)
+let confirmAction: (() => Promise<void>) | null = null
 
 watch(
   () => props.node.id,
@@ -38,17 +40,24 @@ watch(
   },
 )
 
-const descendantIds = computed(() => {
-  const set = new Set<string>()
+interface Affected {
+  id: string
+  label: string
+  effectiveHardness: number
+}
+const descendants = (): Affected[] => {
+  const out: Affected[] = []
   const walk = (nodes: ResolvedNode[]): void => {
     for (const n of nodes) {
-      set.add(n.id)
+      out.push({ id: n.id, label: n.label, effectiveHardness: n.effectiveHardness })
       walk(n.children)
     }
   }
   walk(props.node.children)
-  return set
-})
+  return out
+}
+
+const descendantIds = computed(() => new Set(descendants().map((d) => d.id)))
 const moveOptions = computed(() =>
   props.allNodes.filter((n) => n.id !== props.node.id && !descendantIds.value.has(n.id)),
 )
@@ -60,16 +69,35 @@ const parseHardness = (raw: string): number | undefined => {
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : undefined
 }
 
-const run = async (fn: () => Promise<void>): Promise<void> => {
+const ask = (state: ConfirmState, action: () => Promise<void>): void => {
+  confirmState.value = state
+  confirmAction = action
+}
+const cancelConfirm = (): void => {
+  confirmState.value = null
+  confirmAction = null
+}
+const runConfirm = async (): Promise<void> => {
+  const action = confirmAction
   busy.value = true
   error.value = ''
   try {
-    await fn()
+    if (action) await action()
+    confirmState.value = null
+    confirmAction = null
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong.'
+    confirmState.value = null
+    confirmAction = null
   } finally {
     busy.value = false
   }
+}
+
+const finish = (node: ResolvedNode): void => {
+  mode.value = 'view'
+  emit('select', node)
+  emit('changed')
 }
 
 // ---- edit -----------------------------------------------------------------
@@ -79,106 +107,123 @@ const startEdit = (): void => {
   editHardness.value = ''
   mode.value = 'edit'
 }
-const saveEdit = (): Promise<void> =>
-  run(async () => {
-    const apply = async (confirm: boolean): Promise<void> => {
+const saveEdit = (): void => {
+  const label = editLabel.value.trim()
+  const content = editContent.value.trim()
+  if (!label || !content) {
+    error.value = 'Label and content are required.'
+    return
+  }
+  const desc = props.node.protected ? descendants() : []
+  ask(
+    {
+      title: 'Save changes',
+      message: props.node.protected
+        ? `“${props.node.label}” is a protected truth and ${desc.length} build on it. Save anyway?`
+        : `Save your changes to “${props.node.label}”?`,
+      affected: desc,
+      danger: false,
+      confirmLabel: 'Save',
+    },
+    async () => {
       const res = await updateTreeNode(props.treeId, props.node.id, {
-        label: editLabel.value.trim(),
-        content: editContent.value.trim(),
+        label,
+        content,
         hardnessSet: parseHardness(editHardness.value),
-        confirm,
+        confirm: true,
       })
-      if (isCascadePreview(res)) {
-        pendingPreview.value = res
-        pendingAction = () => apply(true)
-        return
-      }
+      if (isCascadePreview(res)) return
       notices.value = res.hardnessNote ? [res.hardnessNote] : []
       finish(res.node)
-    }
-    await apply(false)
-  })
+    },
+  )
+}
 
-// ---- add child ------------------------------------------------------------
+// ---- add child (a deliberate form; create is additive, not destructive) ----
 const startAdd = (): void => {
   addLabel.value = ''
   addContent.value = ''
   addHardness.value = ''
   mode.value = 'add'
 }
-const saveAdd = (): Promise<void> =>
-  run(async () => {
+const saveAdd = async (): Promise<void> => {
+  const label = addLabel.value.trim()
+  const content = addContent.value.trim()
+  if (!label || !content) return
+  busy.value = true
+  error.value = ''
+  try {
     const res = await createTreeNode(props.treeId, {
       parentId: props.node.id,
-      label: addLabel.value.trim(),
-      content: addContent.value.trim(),
+      label,
+      content,
       hardnessSet: parseHardness(addHardness.value) ?? null,
     })
-    notices.value = [res.hardnessNote, res.volatilityWarning, res.similarTo ? `Similar to “${res.similarTo.label}”` : undefined].filter(
-      (n): n is string => Boolean(n),
-    )
+    notices.value = [
+      res.hardnessNote,
+      res.volatilityWarning,
+      res.similarTo ? `Similar to “${res.similarTo.label}” — dedupe?` : undefined,
+    ].filter((n): n is string => Boolean(n))
     finish(res.node)
-  })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Could not create the node.'
+  } finally {
+    busy.value = false
+  }
+}
 
 // ---- move -----------------------------------------------------------------
 const startMove = (): void => {
   moveTarget.value = props.node.parentId
   mode.value = 'move'
 }
-const saveMove = (): Promise<void> =>
-  run(async () => {
-    const apply = async (confirm: boolean): Promise<void> => {
-      const res = await moveTreeNode(props.treeId, props.node.id, moveTarget.value, confirm)
-      if (isCascadePreview(res)) {
-        pendingPreview.value = res
-        pendingAction = () => apply(true)
-        return
-      }
+const saveMove = (): void => {
+  const target = moveOptions.value.find((o) => o.id === moveTarget.value)
+  const desc = descendants()
+  ask(
+    {
+      title: 'Move this truth',
+      message: `Move “${props.node.label}” ${moveTarget.value ? `under “${target?.label}”` : 'to a root'}${
+        desc.length ? `. ${desc.length} descendant${desc.length > 1 ? 's' : ''} move with it` : ''
+      }.`,
+      affected: desc,
+      danger: false,
+      confirmLabel: 'Move',
+    },
+    async () => {
+      const res = await moveTreeNode(props.treeId, props.node.id, moveTarget.value, true)
+      if (isCascadePreview(res)) return
       finish(res)
-    }
-    await apply(false)
-  })
+    },
+  )
+}
 
-// ---- delete ---------------------------------------------------------------
-const del = (): Promise<void> =>
-  run(async () => {
-    const apply = async (confirm: boolean): Promise<void> => {
-      const res = await deleteTreeNode(props.treeId, props.node.id, confirm)
-      if (isCascadePreview(res)) {
-        pendingPreview.value = res
-        pendingAction = () => apply(true)
-        return
-      }
-      pendingPreview.value = null
+// ---- delete (always confirmed) --------------------------------------------
+const del = (): void => {
+  const desc = descendants()
+  ask(
+    {
+      title: 'Delete this truth',
+      message: `Delete “${props.node.label}”${
+        desc.length ? ` and its ${desc.length} descendant${desc.length > 1 ? 's' : ''}` : ''
+      }. This cannot be undone.`,
+      affected: desc,
+      danger: true,
+      confirmLabel: 'Delete',
+    },
+    async () => {
+      const res = await deleteTreeNode(props.treeId, props.node.id, true)
+      if (isCascadePreview(res)) return
       mode.value = 'view'
       emit('select', null)
       emit('changed')
-    }
-    await apply(false)
-  })
-
-const confirmPreview = (): Promise<void> =>
-  run(async () => {
-    const action = pendingAction
-    pendingAction = null
-    pendingPreview.value = null
-    if (action) await action()
-  })
-const cancelPreview = (): void => {
-  pendingPreview.value = null
-  pendingAction = null
-}
-
-const finish = (node: ResolvedNode): void => {
-  mode.value = 'view'
-  emit('select', node)
-  emit('changed')
+    },
+  )
 }
 </script>
 
 <template>
   <div>
-    <!-- advisory notices -->
     <div
       v-if="notices.length"
       class="mb-4 space-y-1 rounded-sm border border-amber bg-paper px-3 py-2 font-mono text-[0.72rem] text-ink-2"
@@ -232,9 +277,7 @@ const finish = (node: ResolvedNode): void => {
         <button class="rounded-sm border border-ink py-2 hover:bg-ink hover:text-paper" @click="startAdd">
           add child
         </button>
-        <button class="rounded-sm border border-line py-2 hover:border-ink" @click="startMove">
-          move
-        </button>
+        <button class="rounded-sm border border-line py-2 hover:border-ink" @click="startMove">move</button>
         <button class="rounded-sm border border-line py-2 text-rust hover:border-rust" @click="del">
           delete
         </button>
@@ -248,7 +291,7 @@ const finish = (node: ResolvedNode): void => {
       <textarea v-model="editContent" rows="5" class="w-full rounded-sm border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink" placeholder="the truth"></textarea>
       <input v-model="editHardness" inputmode="numeric" class="w-full rounded-sm border border-line bg-paper px-3 py-2 font-mono text-sm outline-none focus:border-ink" placeholder="propose hardness 0-100 (optional)" />
       <div class="flex gap-2">
-        <button type="submit" :disabled="busy" class="flex-1 rounded-sm bg-ink py-2 font-mono text-[0.8rem] text-paper disabled:opacity-50">save</button>
+        <button type="submit" :disabled="busy" class="flex-1 rounded-sm bg-ink py-2 font-mono text-[0.8rem] text-paper disabled:opacity-50">review &amp; save</button>
         <button type="button" class="rounded-sm border border-line px-4 font-mono text-[0.8rem]" @click="mode = 'view'">cancel</button>
       </div>
     </form>
@@ -273,17 +316,17 @@ const finish = (node: ResolvedNode): void => {
         <option v-for="opt in moveOptions" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
       </select>
       <div class="flex gap-2">
-        <button type="submit" :disabled="busy" class="flex-1 rounded-sm bg-ink py-2 font-mono text-[0.8rem] text-paper disabled:opacity-50">move</button>
+        <button type="submit" :disabled="busy" class="flex-1 rounded-sm bg-ink py-2 font-mono text-[0.8rem] text-paper disabled:opacity-50">review &amp; move</button>
         <button type="button" class="rounded-sm border border-line px-4 font-mono text-[0.8rem]" @click="mode = 'view'">cancel</button>
       </div>
     </form>
 
-    <AppCascadeModal
-      v-if="pendingPreview"
-      :preview="pendingPreview"
+    <AppConfirmDialog
+      v-if="confirmState"
+      :state="confirmState"
       :busy="busy"
-      @confirm="confirmPreview"
-      @cancel="cancelPreview"
+      @confirm="runConfirm"
+      @cancel="cancelConfirm"
     />
   </div>
 </template>
