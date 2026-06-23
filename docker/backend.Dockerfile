@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 
@@ -22,7 +22,10 @@ COPY tsconfig.json tsconfig.build.json drizzle.config.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json
 
 # ── Production stage ──────────────────────────────────────────────────────────
-FROM node:22-alpine
+# Debian-based (glibc), NOT alpine: sodium-native (pulled in by
+# @fastify/secure-session) ships no musl prebuild, so an alpine runtime crashes
+# at server start with ADDON_NOT_FOUND. glibc has the prebuilt binary.
+FROM node:22-slim
 
 WORKDIR /app
 
@@ -43,8 +46,8 @@ RUN corepack enable && corepack prepare pnpm@10.30.3 --activate \
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
 RUN chmod +x /app/docker/entrypoint.sh
 
-# Non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S heartwood -u 1001 -G nodejs
+# Non-root user (Debian syntax)
+RUN groupadd -g 1001 nodejs && useradd -r -u 1001 -g nodejs heartwood
 RUN chown -R heartwood:nodejs /app
 USER heartwood
 
