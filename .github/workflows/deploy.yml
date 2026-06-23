@@ -1,0 +1,114 @@
+name: Deploy
+
+on:
+    workflow_dispatch:
+        inputs:
+            ref:
+                description: "Branch or tag to build and deploy"
+                required: true
+                default: "main"
+                type: string
+            image_tag:
+                description: "Docker image tag to deploy (e.g. sha-abc1234, latest). Leave empty to build fresh from ref."
+                required: false
+                default: ""
+                type: string
+
+# Only one deploy at a time — never cancel an in-flight deploy.
+concurrency:
+    group: deploy-production
+    cancel-in-progress: false
+
+env:
+    REGISTRY: ghcr.io
+    BACKEND_IMAGE: ghcr.io/wlankabl/heartwood/backend
+    FRONTEND_IMAGE: ghcr.io/wlankabl/heartwood/frontend
+
+jobs:
+    build-and-push:
+        name: Build & Push Images
+        # NOTE: KeeperLog runs this on a self-hosted runner for faster builds
+        # and to avoid GHCR egress from GitHub-hosted machines.
+        # Switch to self-hosted by replacing the line below with: runs-on: self-hosted
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        if: ${{ inputs.image_tag == '' }}
+        environment: production
+        permissions:
+            contents: read
+            packages: write
+
+        outputs:
+            deploy_tag: ${{ steps.resolve-tag.outputs.tag }}
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.ref }}
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to GHCR
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ secrets.GHCR_USER }}
+                  password: ${{ secrets.GHCR_TOKEN }}
+
+            - name: Resolve image tag (commit SHA)
+              id: resolve-tag
+              run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+            - name: Build & push backend
+              uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  file: docker/backend.Dockerfile
+                  push: true
+                  tags: |
+                      ${{ env.BACKEND_IMAGE }}:${{ steps.resolve-tag.outputs.tag }}
+                      ${{ env.BACKEND_IMAGE }}:latest
+                  cache-from: type=gha,scope=backend
+                  cache-to: type=gha,mode=max,scope=backend
+
+            - name: Build & push frontend
+              uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  file: docker/frontend.Dockerfile
+                  push: true
+                  tags: |
+                      ${{ env.FRONTEND_IMAGE }}:${{ steps.resolve-tag.outputs.tag }}
+                      ${{ env.FRONTEND_IMAGE }}:latest
+                  cache-from: type=gha,scope=frontend
+                  cache-to: type=gha,mode=max,scope=frontend
+
+    deploy:
+        name: Deploy to production
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        # Run after build-and-push unless build was skipped (pre-tagged deploy)
+        needs: build-and-push
+        if: ${{ !cancelled() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') }}
+        environment: production
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.ref }}
+
+            - name: Run deploy script
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+                  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+                  GHCR_USER: ${{ secrets.GHCR_USER }}
+                  GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+                  DOTENV_RAW: ${{ secrets.DOTENV }}
+                  BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+                  FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+                  DEPLOY_TAG: ${{ inputs.image_tag || needs.build-and-push.outputs.deploy_tag || 'latest' }}
+                  COMPOSE_FILE: docker-compose.production.yml
+              run: bash .github/scripts/deploy.sh
