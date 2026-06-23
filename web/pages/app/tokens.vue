@@ -11,25 +11,6 @@ const revealed = ref<{ name: string; raw: string } | null>(null)
 const copied = ref(false)
 const errorMsg = ref('')
 
-const mcpSnippet = `{
-  "mcpServers": {
-    "heartwood": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp",
-      "headers": { "Authorization": "Bearer hw_your-token" }
-    }
-  }
-}`
-
-const hookSnippet = `{
-  "hooks": {
-    "SessionStart": [
-      { "hooks": [ { "type": "command",
-        "command": "curl -s -H \\"Authorization: Bearer hw_your-token\\" http://localhost:3000/trees/keeperlog/roots" } ] }
-    ]
-  }
-}`
-
 const load = async (): Promise<void> => {
   loading.value = true
   try {
@@ -128,8 +109,15 @@ const copy = async (): Promise<void> => {
         class="mt-3 rounded-sm border border-ink px-4 py-1.5 font-mono text-[0.8rem] hover:bg-ink hover:text-paper"
         @click="copy"
       >
-        {{ copied ? 'Copied ✓' : 'Copy' }}
+        {{ copied ? 'Copied ✓' : 'Copy token' }}
       </button>
+
+      <p class="mt-5 font-mono text-[0.72rem] uppercase tracking-wide text-ink-2">
+        Then connect in one line, token already in it
+      </p>
+      <div class="mt-2">
+        <AppCopyBlock :code="mcpAddCommand(revealed.raw)" label="quick connect" />
+      </div>
     </div>
 
     <p v-if="errorMsg" class="mt-4 font-mono text-sm text-rust">{{ errorMsg }}</p>
@@ -172,38 +160,49 @@ const copy = async (): Promise<void> => {
         <li>
           <div class="flex items-baseline gap-3">
             <span class="font-mono text-[0.8rem] text-rust">01</span>
-            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Add the server</h3>
+            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Register the server</h3>
           </div>
           <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
-            In your project's <code class="font-mono text-[0.85em]">.mcp.json</code> (or
-            <code class="font-mono text-[0.85em]">~/.claude.json</code>):
+            One line and Claude Code registers Heartwood itself. Paste your token where shown
+            (or copy the ready-made command from the box above after creating a token).
           </p>
-          <pre
-            class="ml-7 mt-3 max-w-2xl overflow-x-auto rounded-sm border border-line bg-paper-2 p-4 font-mono text-[0.76rem] leading-relaxed text-ink"
-          ><code>{{ mcpSnippet }}</code></pre>
+          <div class="ml-7 mt-3 max-w-2xl">
+            <AppCopyBlock :code="mcpAddCommand()" label="quick connect" />
+          </div>
+          <details class="ml-7 mt-3 max-w-2xl">
+            <summary class="cursor-pointer font-mono text-[0.74rem] text-ink-2 hover:text-ink">
+              or do it manually in .mcp.json
+            </summary>
+            <div class="mt-2">
+              <AppCopyBlock :code="mcpJson()" label=".mcp.json" />
+            </div>
+          </details>
         </li>
         <li>
           <div class="flex items-baseline gap-3">
             <span class="font-mono text-[0.8rem] text-rust">02</span>
-            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Auto-load your roots</h3>
+            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Let the agent build it</h3>
           </div>
           <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
-            Point a SessionStart hook at your protected core, so every new chat loads it first.
-            In <code class="font-mono text-[0.85em]">.claude/settings.local.json</code>:
+            Open a fresh Claude Code session, then paste this. The agent interviews you and grows
+            the first tree, so you never hand-build nodes.
           </p>
-          <pre
-            class="ml-7 mt-3 max-w-2xl overflow-x-auto rounded-sm border border-line bg-paper-2 p-4 font-mono text-[0.76rem] leading-relaxed text-ink"
-          ><code>{{ hookSnippet }}</code></pre>
+          <div class="ml-7 mt-3 max-w-2xl">
+            <AppCopyBlock :code="bootstrapPrompt()" label="bootstrap prompt" />
+          </div>
         </li>
         <li>
           <div class="flex items-baseline gap-3">
             <span class="font-mono text-[0.8rem] text-rust">03</span>
-            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Open a new session</h3>
+            <h3 class="font-mono text-[0.92rem] font-medium text-ink">Auto-load your roots (optional)</h3>
           </div>
           <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
-            MCP servers load at session start. Start a fresh chat and your agent can read and
-            grow the tree.
+            Point a SessionStart hook at your protected core so every new chat loads it first. In
+            <code class="font-mono text-[0.85em]">.claude/settings.local.json</code>:
           </p>
+          <div class="ml-7 mt-3 max-w-2xl">
+            <AppCopyBlock :code="hookSnippet()" label=".claude/settings.local.json" />
+          </div>
         </li>
       </ol>
     </div>

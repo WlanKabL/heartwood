@@ -71,17 +71,47 @@ const rest = computed(() => cards.value?.slice(1) ?? [])
 
     <div
       v-else-if="!cards || cards.length === 0"
-      class="mt-12 rounded-sm border border-line bg-paper-2 p-10 text-center"
+      class="mt-12 flex flex-col gap-8 rounded-sm border-[1.5px] border-ink bg-paper-2 p-8 sm:flex-row sm:items-start"
     >
-      <div class="mx-auto w-fit opacity-70">
-        <AppTreeGlyph :forest="[]" :size="96" />
+      <AppTreeGlyph :forest="[]" :size="140" class="opacity-60" />
+      <div class="flex-1">
+        <p class="kicker text-rust">first run</p>
+        <h2 class="mt-1 font-serif text-3xl font-medium tracking-tight">Your forest is bare.</h2>
+        <p class="mt-2 max-w-xl text-ink-2">
+          You do not build the tree by hand. Connect your agent, then let it interview you and
+          grow the first tree for you.
+        </p>
+
+        <ol class="mt-6 space-y-6">
+          <li>
+            <div class="flex items-baseline gap-3">
+              <span class="font-mono text-[0.8rem] text-rust">01</span>
+              <h3 class="font-mono text-[0.92rem] font-medium text-ink">Connect your agent</h3>
+            </div>
+            <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
+              Mint a token and register Heartwood in a single line.
+            </p>
+            <NuxtLink
+              to="/app/tokens"
+              class="ml-7 mt-2 inline-block rounded-sm bg-ink px-4 py-2 font-mono text-[0.78rem] text-paper transition-transform hover:-translate-y-0.5"
+              >get a token &amp; connect →</NuxtLink
+            >
+          </li>
+          <li>
+            <div class="flex items-baseline gap-3">
+              <span class="font-mono text-[0.8rem] text-rust">02</span>
+              <h3 class="font-mono text-[0.92rem] font-medium text-ink">Let it build the tree</h3>
+            </div>
+            <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
+              Paste this into a Claude Code session that has Heartwood connected. The agent
+              interviews you and grows the tree itself.
+            </p>
+            <div class="ml-7 mt-2 max-w-xl">
+              <AppCopyBlock :code="bootstrapPrompt()" label="bootstrap prompt" />
+            </div>
+          </li>
+        </ol>
       </div>
-      <h2 class="mt-4 font-serif text-2xl font-medium">Your forest is bare.</h2>
-      <p class="mx-auto mt-2 max-w-md text-ink-2">
-        Connect Heartwood to your agent and create your first root truth. The
-        <NuxtLink to="/docs" class="text-rust underline-offset-2 hover:underline">setup guide</NuxtLink>
-        takes two minutes.
-      </p>
     </div>
 
     <div v-else class="mt-12 space-y-6">
