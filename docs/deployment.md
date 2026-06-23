@@ -31,20 +31,33 @@ as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
 
 ---
 
-## 3. GitHub `production` environment secrets
+## 3. GitHub `production` environment: variables and secrets
 
-In your repository go to **Settings > Environments**, create an environment named `production`,
-and add the following secrets. The deploy workflow reads every one of them.
+In your repository go to **Settings > Environments** and create an environment named `production`.
+GitHub keeps **Variables** (not sensitive, stored in clear, readable) separate from **Secrets**
+(sensitive, masked in logs). Put each value in its right bucket so the secret store holds only
+things that are actually secret.
 
-| Secret | What to put in |
+**Variables** — _Settings > Environments > production > Add variable_:
+
+| Variable | What to put in |
 | --- | --- |
 | `DEPLOY_HOST` | IP address or hostname of the server |
 | `DEPLOY_USER` | SSH user the action logs in as (e.g. `deploy`) |
-| `DEPLOY_SSH_KEY` | The **private** key (multiline PEM, including `-----BEGIN` header and `-----END` footer) |
 | `DEPLOY_PATH` | Absolute path on the server where Heartwood lives, e.g. `/opt/heartwood` |
-| `GHCR_USER` | Your GitHub username or the org that owns the packages |
-| `GHCR_TOKEN` | A GitHub PAT with `write:packages` (the action pushes and the server pulls) |
+| `GHCR_USER` | Your GitHub username or the org that owns the packages (used for the server-side pull) |
+
+**Secrets** — _Settings > Environments > production > Add secret_:
+
+| Secret | What to put in |
+| --- | --- |
+| `DEPLOY_SSH_KEY` | The **private** key (multiline PEM, including `-----BEGIN`/`-----END`) |
+| `GHCR_TOKEN` | A GitHub PAT with `read:packages` — only the **server pull** needs it; the image build+push uses the built-in `GITHUB_TOKEN` |
 | `DOTENV` | The **full content** of the prod `.env` file (see the template below) |
+
+> The build-and-push job logs in to GHCR with GitHub's built-in `GITHUB_TOKEN` (covered by the
+> workflow's `packages: write` permission), so you do **not** need a PAT for pushing. `GHCR_TOKEN`
+> only needs `read:packages`, for the server to pull the images.
 
 The deploy script appends `BACKEND_IMAGE`, `FRONTEND_IMAGE`, and `DEPLOY_TAG` to the remote
 `.env` automatically. Do not include those in `DOTENV`.
@@ -184,8 +197,8 @@ Go to **Actions > Deploy > Run workflow**. Two inputs:
 ### What happens
 
 When `image_tag` is empty the `build-and-push` job runs first: it checks out `ref`, logs in to
-GHCR with `GHCR_USER` / `GHCR_TOKEN`, builds both Dockerfiles, and pushes them tagged with the
-short commit SHA and `latest`.
+GHCR with the built-in `GITHUB_TOKEN`, builds both Dockerfiles, and pushes them tagged with the
+short commit SHA and `latest`. (The server-side pull later uses `GHCR_USER` / `GHCR_TOKEN`.)
 
 The `deploy` job always runs (whether or not a build happened). It SSHes into the server and:
 
