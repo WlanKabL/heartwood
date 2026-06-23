@@ -1,6 +1,7 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { buildMcpServer, type McpDeps } from '../mcp/server.js'
+import { getProtectedNodes } from '../core/service.js'
 import { isAuthorized } from './auth.js'
 
 export interface HttpServerOptions {
@@ -18,31 +19,45 @@ const json = (
   res.end(JSON.stringify(body))
 }
 
+const ROOTS_PATH = /^\/trees\/([^/]+)\/roots\/?$/
+
 const handle = async (
   req: IncomingMessage,
   res: ServerResponse,
   options: HttpServerOptions,
 ): Promise<void> => {
-  if (!(req.url ?? '').startsWith('/mcp')) {
-    json(res, 404, { error: 'not found' })
-    return
-  }
   if (!isAuthorized(req.headers.authorization, options.token)) {
     json(res, 401, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer' })
     return
   }
-  // Stateless: a fresh server and transport per request. The DB holds all state.
-  const server = buildMcpServer(options.deps)
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-  res.on('close', () => {
-    void transport.close()
-    void server.close()
-  })
-  await server.connect(transport)
-  await transport.handleRequest(req, res)
+
+  const path = (req.url ?? '').split('?')[0] ?? ''
+
+  // MCP endpoint for agents.
+  if (path.startsWith('/mcp')) {
+    const server = buildMcpServer(options.deps)
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+    res.on('close', () => {
+      void transport.close()
+      void server.close()
+    })
+    await server.connect(transport)
+    await transport.handleRequest(req, res)
+    return
+  }
+
+  // Plain REST read for the session hook: the protected core of a tree.
+  const rootsMatch = ROOTS_PATH.exec(path)
+  if (req.method === 'GET' && rootsMatch) {
+    const treeId = decodeURIComponent(rootsMatch[1]!)
+    json(res, 200, await getProtectedNodes(options.deps.repo, treeId, options.deps.now()))
+    return
+  }
+
+  json(res, 404, { error: 'not found' })
 }
 
-/** An HTTP server exposing the MCP endpoint at POST /mcp, gated by a bearer token. */
+/** HTTP server: MCP at /mcp for agents, GET /trees/:treeId/roots for the hook. Bearer-gated. */
 export const createHttpServer = (options: HttpServerOptions): Server => {
   return createServer((req, res) => {
     handle(req, res, options).catch((error: unknown) => {

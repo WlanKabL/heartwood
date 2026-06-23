@@ -97,6 +97,34 @@ export class SqliteTreeRepository implements TreeRepository {
     }
   }
 
+  async updateNode(node: TreeNode): Promise<void> {
+    const result = this.db
+      .prepare(
+        `UPDATE nodes SET
+           tree_id = ?, parent_id = ?, label = ?, content = ?, hardness_set = ?,
+           status = ?, created_at = ?, updated_at = ?, last_confirmed_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        node.treeId,
+        node.parentId,
+        node.label,
+        node.content,
+        node.hardnessSet,
+        node.status,
+        node.createdAt,
+        node.updatedAt,
+        node.lastConfirmedAt,
+        node.id,
+      )
+    if (Number(result.changes) === 0) throw new Error(`unknown node id: ${node.id}`)
+  }
+
+  async deleteNode(id: string): Promise<void> {
+    const result = this.db.prepare('DELETE FROM nodes WHERE id = ?').run(id)
+    if (Number(result.changes) === 0) throw new Error(`unknown node id: ${id}`)
+  }
+
   async listTreeIds(): Promise<string[]> {
     return this.db
       .prepare('SELECT DISTINCT tree_id FROM nodes')

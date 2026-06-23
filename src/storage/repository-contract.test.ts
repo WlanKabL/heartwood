@@ -70,6 +70,30 @@ const contract = (name: string, make: () => TreeRepository): void => {
       await repo.insertNode(node('r', null))
       await expect(repo.insertNode(node('r', null))).rejects.toThrow(/duplicate/)
     })
+
+    it('updates an existing node', async () => {
+      const repo = make()
+      await repo.insertNode(node('r', null))
+      await repo.updateNode(node('r', null, { content: 'changed', hardnessSet: 70 }))
+      const fetched = await repo.getNode('r')
+      expect(fetched?.content).toBe('changed')
+      expect(fetched?.hardnessSet).toBe(70)
+    })
+
+    it('rejects updating an unknown node', async () => {
+      await expect(make().updateNode(node('ghost', null))).rejects.toThrow(/unknown/)
+    })
+
+    it('deletes a node', async () => {
+      const repo = make()
+      await repo.insertNode(node('r', null))
+      await repo.deleteNode('r')
+      expect(await repo.getNode('r')).toBeUndefined()
+    })
+
+    it('rejects deleting an unknown node', async () => {
+      await expect(make().deleteNode('ghost')).rejects.toThrow(/unknown/)
+    })
   })
 }
 

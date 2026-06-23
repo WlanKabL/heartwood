@@ -61,11 +61,19 @@ describe('http + mcp end to end', () => {
     await expect(connect(url, 'wrong-token')).rejects.toThrow()
   })
 
-  it('accepts a valid token and lists the four tools', async () => {
+  it('accepts a valid token and lists its tools', async () => {
     const url = await startServer()
     const client = await connect(url, TOKEN)
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['create_node', 'get_roots', 'get_subtree', 'get_tree'])
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'create_node',
+      'delete_node',
+      'get_roots',
+      'get_subtree',
+      'get_tree',
+      'move_node',
+      'update_node',
+    ])
     await client.close()
   })
 
@@ -104,5 +112,49 @@ describe('http + mcp end to end', () => {
     )
     expect(leaf.protected).toBe(false)
     await client.close()
+  })
+
+  it('gates an edit of a protected node behind confirm', async () => {
+    const url = await startServer()
+    const client = await connect(url, TOKEN)
+    const root = parseOne(
+      await client.callTool({
+        name: 'create_node',
+        arguments: { treeId: 'g', parentId: null, label: 'identity', content: 'original' },
+      }),
+    )
+
+    const previewRaw = JSON.parse(
+      textOf(await client.callTool({ name: 'update_node', arguments: { treeId: 'g', nodeId: root.id, content: 'hijacked' } })),
+    )
+    expect(z.object({ requiresConfirmation: z.literal(true) }).parse(previewRaw).requiresConfirmation).toBe(true)
+
+    const updated = parseOne(
+      await client.callTool({
+        name: 'update_node',
+        arguments: { treeId: 'g', nodeId: root.id, content: 'on purpose', confirm: true },
+      }),
+    )
+    expect(updated.id).toBe(root.id)
+    await client.close()
+  })
+
+  it('serves the protected core over REST for the hook, bearer-gated', async () => {
+    const url = await startServer()
+    const base = `${url.protocol}//${url.host}`
+    const client = await connect(url, TOKEN)
+    await client.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'h', parentId: null, label: 'identity', content: 'x' },
+    })
+    await client.close()
+
+    const res = await fetch(`${base}/trees/h/roots`, { headers: { authorization: `Bearer ${TOKEN}` } })
+    expect(res.status).toBe(200)
+    const nodes = z.array(NodeView).parse(await res.json())
+    expect(nodes.some((n) => n.label === 'identity')).toBe(true)
+
+    const noauth = await fetch(`${base}/trees/h/roots`)
+    expect(noauth.status).toBe(401)
   })
 })

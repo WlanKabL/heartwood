@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { TreeRepository } from '../core/repository.js'
 import { getResolvedTree, getResolvedSubtree, getProtectedNodes } from '../core/service.js'
 import { createNode } from '../core/create.js'
+import { updateNode, moveNode, deleteNode } from '../core/write.js'
 
 export interface McpDeps {
   repo: TreeRepository
@@ -101,6 +102,95 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
               content: args.content,
               hardnessSet: args.hardnessSet ?? null,
             },
+            now(),
+          ),
+        )
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'update_node',
+    {
+      description:
+        "Edit a node's content, label or proposed hardness. If the node is protected, this returns a cascade preview (what hangs on it) instead of changing it; show it to the human and re-run with confirm: true after they approve.",
+      inputSchema: {
+        treeId: z.string(),
+        nodeId: z.string(),
+        content: z.string().min(1).optional(),
+        label: z.string().min(1).optional(),
+        hardnessSet: z.number().min(0).max(100).nullable().optional(),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(
+          await updateNode(
+            deps.repo,
+            {
+              treeId: args.treeId,
+              nodeId: args.nodeId,
+              content: args.content,
+              label: args.label,
+              hardnessSet: args.hardnessSet,
+              confirm: args.confirm,
+            },
+            now(),
+          ),
+        )
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'move_node',
+    {
+      description:
+        'Re-hang a node under a new parent (newParentId), or null to make it its own root. Rejects cycles. A protected node returns a cascade preview unless confirm: true.',
+      inputSchema: {
+        treeId: z.string(),
+        nodeId: z.string(),
+        newParentId: z.string().nullable(),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(
+          await moveNode(
+            deps.repo,
+            { treeId: args.treeId, nodeId: args.nodeId, newParentId: args.newParentId, confirm: args.confirm },
+            now(),
+          ),
+        )
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'delete_node',
+    {
+      description:
+        'Delete a node and its descendants. Returns a cascade preview (what would be removed) unless confirm: true. Confirmation is required if the node is protected or has descendants.',
+      inputSchema: {
+        treeId: z.string(),
+        nodeId: z.string(),
+        confirm: z.boolean().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(
+          await deleteNode(
+            deps.repo,
+            { treeId: args.treeId, nodeId: args.nodeId, confirm: args.confirm },
             now(),
           ),
         )

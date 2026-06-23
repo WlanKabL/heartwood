@@ -9,6 +9,8 @@ export interface TreeRepository {
   listNodes(treeId: string): Promise<TreeNode[]>
   getNode(id: string): Promise<TreeNode | undefined>
   insertNode(node: TreeNode): Promise<void>
+  updateNode(node: TreeNode): Promise<void>
+  deleteNode(id: string): Promise<void>
   listTreeIds(): Promise<string[]>
 }
 
@@ -27,6 +29,15 @@ export class InMemoryTreeRepository implements TreeRepository {
   async insertNode(node: TreeNode): Promise<void> {
     if (this.nodes.has(node.id)) throw new Error(`duplicate node id: ${node.id}`)
     this.nodes.set(node.id, { ...node })
+  }
+
+  async updateNode(node: TreeNode): Promise<void> {
+    if (!this.nodes.has(node.id)) throw new Error(`unknown node id: ${node.id}`)
+    this.nodes.set(node.id, { ...node })
+  }
+
+  async deleteNode(id: string): Promise<void> {
+    if (!this.nodes.delete(id)) throw new Error(`unknown node id: ${id}`)
   }
 
   async listTreeIds(): Promise<string[]> {
