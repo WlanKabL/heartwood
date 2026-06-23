@@ -64,4 +64,40 @@ describe('findOrCreateGithubUser', () => {
 
     expect(idA).not.toBe(idB)
   })
+
+  it('creates two distinct users when different githubIds share the same email', async () => {
+    const db = getDb()
+
+    // Two completely different GitHub accounts whose primary email happens to be identical.
+    const idA = await findOrCreateGithubUser(db, {
+      githubId: 'gh-555',
+      email: 'shared@example.com',
+      displayName: 'Account One',
+    })
+    const idB = await findOrCreateGithubUser(db, {
+      githubId: 'gh-666',
+      email: 'shared@example.com',
+      displayName: 'Account Two',
+    })
+
+    // Must not throw and must produce two distinct user rows.
+    expect(typeof idA).toBe('string')
+    expect(typeof idB).toBe('string')
+    expect(idA).not.toBe(idB)
+
+    // Both identities must exist.
+    const rowA = await db
+      .select()
+      .from(identities)
+      .where(and(eq(identities.provider, 'github'), eq(identities.providerAccountId, 'gh-555')))
+    const rowB = await db
+      .select()
+      .from(identities)
+      .where(and(eq(identities.provider, 'github'), eq(identities.providerAccountId, 'gh-666')))
+
+    expect(rowA).toHaveLength(1)
+    expect(rowB).toHaveLength(1)
+    expect(rowA[0]?.userId).toBe(idA)
+    expect(rowB[0]?.userId).toBe(idB)
+  })
 })

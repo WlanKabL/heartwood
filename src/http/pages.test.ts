@@ -90,6 +90,36 @@ describe('GET / (pages)', () => {
     await app.close()
   })
 
+  it('logged-in: delete control uses fetch DELETE, not a /delete form action', async () => {
+    const app = buildApp()
+    await app.ready()
+    const db = getDb()
+    const userId = getUserA()
+
+    await db
+      .insert(apiTokens)
+      .values({
+        userId,
+        name: 'deletable-token',
+        tokenHash: 'sha256:fakehash_delete_wiring_test',
+        prefix: 'hw_del',
+      })
+
+    const cookie = await loginAs(app, userId)
+    const res = await app.inject({ method: 'GET', url: '/', headers: { cookie } })
+
+    expect(res.statusCode).toBe(200)
+
+    // The page must wire up fetch with method DELETE for the /api/tokens/ path.
+    expect(res.body).toContain("method: 'DELETE'")
+    expect(res.body).toContain('/api/tokens/')
+
+    // There must be NO dead form that POSTs to a /delete sub-path.
+    expect(res.body).not.toContain('/delete')
+
+    await app.close()
+  })
+
   it('logged-in: shows GitHub link for unauthenticated request even after session cookie is set for another user', async () => {
     const app = buildApp()
     await app.ready()

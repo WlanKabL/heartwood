@@ -75,13 +75,11 @@ const dashboardPage = (email: string, tokenRows: { id: string; name: string; pre
       : tokenRows
           .map(
             (t) =>
-              `<tr>
+              `<tr data-token-id="${escapeHtml(t.id)}">
             <td>${escapeHtml(t.name)}</td>
             <td><code>${escapeHtml(t.prefix)}…</code></td>
             <td>
-              <form method="post" action="/api/tokens/${escapeHtml(t.id)}/delete" style="display:inline">
-                <button class="danger" type="submit" onclick="return confirm('Delete token ${escapeHtml(t.name)}?')">Delete</button>
-              </form>
+              <button class="danger" type="button" onclick="deleteToken(this, '${escapeHtml(t.id)}', '${escapeHtml(t.name)}')">Delete</button>
             </td>
           </tr>`,
           )
@@ -162,17 +160,15 @@ const dashboardPage = (email: string, tokenRows: { id: string; name: string; pre
       tdPrefix.appendChild(code);
       tr.appendChild(tdPrefix);
 
+      tr.dataset.tokenId = data.id;
+
       const tdAction = document.createElement('td');
-      const delForm = document.createElement('form');
-      delForm.method = 'post';
-      delForm.action = '/api/tokens/' + encodeURIComponent(data.id) + '/delete';
-      delForm.style.display = 'inline';
       const delBtn = document.createElement('button');
-      delBtn.type = 'submit';
+      delBtn.type = 'button';
       delBtn.className = 'danger';
       delBtn.textContent = 'Delete';
-      delForm.appendChild(delBtn);
-      tdAction.appendChild(delForm);
+      delBtn.onclick = function () { deleteToken(delBtn, data.id, data.name); };
+      tdAction.appendChild(delBtn);
       tr.appendChild(tdAction);
 
       tbody.appendChild(tr);
@@ -182,6 +178,30 @@ const dashboardPage = (email: string, tokenRows: { id: string; name: string; pre
       alert('Network error: ' + err);
     }
   });
+
+  window.deleteToken = async function (btn, id, name) {
+    if (!confirm('Delete token ' + name + '?')) return;
+    try {
+      const res = await fetch('/api/tokens/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!res.ok) {
+        alert('Failed to delete token: ' + res.status);
+        return;
+      }
+      const row = btn.closest('tr');
+      if (row) row.remove();
+      if (tbody.querySelectorAll('tr').length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.style.color = '#6b7280';
+        td.textContent = 'No tokens yet.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    } catch (err) {
+      alert('Network error: ' + err);
+    }
+  };
 
   window.copyToken = function () {
     const text = tokenValue.textContent;

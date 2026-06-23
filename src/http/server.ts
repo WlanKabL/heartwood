@@ -40,7 +40,15 @@ export const buildServer = (deps: ServerDeps): FastifyInstance => {
 
   app.register(fastifyCookie)
   app.register(fastifyFormbody)
-  app.register(fastifySecureSession, { key: sessionKey(deps.sessionSecret) })
+  app.register(fastifySecureSession, {
+    key: sessionKey(deps.sessionSecret),
+    cookie: {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: deps.publicUrl.startsWith('https'),
+    },
+  })
 
   registerAuthRoutes(app, {
     db: deps.db,
