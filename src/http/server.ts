@@ -11,6 +11,7 @@ import type { Db } from '../storage/db.js'
 import type { TreeStore } from '../core/repository.js'
 import type { WorkflowStore } from '../core/workflow-repository.js'
 import { registerAuthRoutes } from './auth-routes.js'
+import { registerApiRoutes } from './api-routes.js'
 
 export interface ServerDeps {
   db: Db
@@ -45,6 +46,8 @@ export const buildServer = (deps: ServerDeps): FastifyInstance => {
     github: deps.github,
     publicUrl: deps.publicUrl,
   })
+
+  registerApiRoutes(app, { db: deps.db })
 
   app.all('/mcp', async (request, reply) => {
     const userId = await resolveToken(deps.db, request.headers.authorization, deps.now)
