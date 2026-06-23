@@ -85,38 +85,3 @@ export class InMemoryTreeStore implements TreeStore {
     return new BoundInMemoryTreeRepository(this.store, userId)
   }
 }
-
-/**
- * Convenience wrapper: a single-user in-memory repository. Used directly by the
- * core unit tests (create.test.ts, write.test.ts, etc.) that predate the
- * multi-tenant store and do not need the factory indirection.
- */
-export class InMemoryTreeRepository implements TreeRepository {
-  private readonly nodes = new Map<string, TreeNode>()
-
-  async listNodes(treeId: string): Promise<TreeNode[]> {
-    return [...this.nodes.values()].filter((node) => node.treeId === treeId)
-  }
-
-  async getNode(id: string): Promise<TreeNode | undefined> {
-    return this.nodes.get(id)
-  }
-
-  async insertNode(node: TreeNode): Promise<void> {
-    if (this.nodes.has(node.id)) throw new Error(`duplicate node id: ${node.id}`)
-    this.nodes.set(node.id, { ...node })
-  }
-
-  async updateNode(node: TreeNode): Promise<void> {
-    if (!this.nodes.has(node.id)) throw new Error(`unknown node id: ${node.id}`)
-    this.nodes.set(node.id, { ...node })
-  }
-
-  async deleteNode(id: string): Promise<void> {
-    if (!this.nodes.delete(id)) throw new Error(`unknown node id: ${id}`)
-  }
-
-  async listTreeIds(): Promise<string[]> {
-    return [...new Set([...this.nodes.values()].map((node) => node.treeId))]
-  }
-}

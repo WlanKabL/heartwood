@@ -72,29 +72,3 @@ export class InMemoryWorkflowStore implements WorkflowStore {
     return new BoundInMemoryWorkflowRepository(this.store, userId)
   }
 }
-
-/**
- * Convenience single-user workflow repository. Used directly by workflow.test.ts
- * and other tests that predate the multi-tenant store.
- */
-export class InMemoryWorkflowRepository implements WorkflowRepository {
-  private readonly workflows = new Map<string, Workflow>()
-
-  async listWorkflows(treeId: string): Promise<Workflow[]> {
-    return [...this.workflows.values()].filter((w) => w.treeId === treeId)
-  }
-
-  async getWorkflow(treeId: string, name: string): Promise<Workflow | undefined> {
-    return this.workflows.get(key(treeId, name))
-  }
-
-  async saveWorkflow(workflow: Workflow): Promise<void> {
-    this.workflows.set(key(workflow.treeId, workflow.name), { ...workflow })
-  }
-
-  async deleteWorkflow(treeId: string, name: string): Promise<void> {
-    if (!this.workflows.delete(key(treeId, name))) {
-      throw new Error(`workflow ${name} not found in tree ${treeId}`)
-    }
-  }
-}

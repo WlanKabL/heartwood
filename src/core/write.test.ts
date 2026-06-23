@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TreeNode, ResolvedNode } from './types.js'
-import { InMemoryTreeRepository } from './repository.js'
+import { InMemoryTreeStore } from './repository.js'
+import type { TreeRepository } from './repository.js'
 import { updateNode, moveNode, deleteNode, type CascadePreview } from './write.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -21,9 +22,9 @@ const node = (id: string, parentId: string | null, extra: Partial<TreeNode> = {}
 })
 
 // chain r -> a -> b -> c -> d -> e; 'r' is protected (depth 0), 'e' is a deep, unprotected leaf.
-const chainRepo = async (): Promise<InMemoryTreeRepository> => {
+const chainRepo = async (): Promise<TreeRepository> => {
   const chain = ['r', 'a', 'b', 'c', 'd', 'e']
-  const repo = new InMemoryTreeRepository()
+  const repo = new InMemoryTreeStore().forUser('test-user')
   for (const [i, id] of chain.entries()) await repo.insertNode(node(id, i === 0 ? null : chain[i - 1]!))
   return repo
 }

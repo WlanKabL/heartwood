@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TreeNode } from './types.js'
-import { InMemoryTreeRepository } from './repository.js'
+import { InMemoryTreeStore } from './repository.js'
+import type { TreeRepository } from './repository.js'
 import { getResolvedTree, getResolvedSubtree, getProtectedNodes } from './service.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -20,13 +21,13 @@ const node = (id: string, parentId: string | null, extra: Partial<TreeNode> = {}
   ...extra,
 })
 
-const seed = async (...nodes: TreeNode[]): Promise<InMemoryTreeRepository> => {
-  const repo = new InMemoryTreeRepository()
+const seed = async (...nodes: TreeNode[]): Promise<TreeRepository> => {
+  const repo = new InMemoryTreeStore().forUser('test-user')
   for (const n of nodes) await repo.insertNode(n)
   return repo
 }
 
-describe('service over InMemoryTreeRepository', () => {
+describe('service over InMemoryTreeStore', () => {
   it('resolves a stored tree with computed hardness', async () => {
     const repo = await seed(node('r', null), node('a', 'r'))
     const roots = await getResolvedTree(repo, 't1', NOW)
@@ -50,7 +51,7 @@ describe('service over InMemoryTreeRepository', () => {
   })
 
   it('returns an empty forest for an unknown or empty tree', async () => {
-    const repo = new InMemoryTreeRepository()
+    const repo = new InMemoryTreeStore().forUser('test-user')
     expect(await getResolvedTree(repo, 'nope', NOW)).toEqual([])
   })
 

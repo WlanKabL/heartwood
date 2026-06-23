@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { InMemoryTreeRepository } from './repository.js'
+import { InMemoryTreeStore } from './repository.js'
 import { createNode } from './create.js'
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
 
 describe('createNode', () => {
   it('creates a root and computes its hardness from position', async () => {
-    const repo = new InMemoryTreeRepository()
+    const repo = new InMemoryTreeStore().forUser('test-user')
     const root = await createNode(
       repo,
       { treeId: 't1', parentId: null, label: 'identity', content: 'portable animal record' },
@@ -18,7 +18,7 @@ describe('createNode', () => {
   })
 
   it('creates a child under an existing parent', async () => {
-    const repo = new InMemoryTreeRepository()
+    const repo = new InMemoryTreeStore().forUser('test-user')
     const root = await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)
     const child = await createNode(repo, { treeId: 't1', parentId: root.id, label: 'voice', content: 'y' }, NOW)
     expect(child.parentId).toBe(root.id)
@@ -26,7 +26,7 @@ describe('createNode', () => {
   })
 
   it('allows several roots in the same tree', async () => {
-    const repo = new InMemoryTreeRepository()
+    const repo = new InMemoryTreeStore().forUser('test-user')
     await createNode(repo, { treeId: 't1', parentId: null, label: 'identity', content: 'x' }, NOW)
     const second = await createNode(repo, { treeId: 't1', parentId: null, label: 'voice', content: 'y' }, NOW)
     expect(second.parentId).toBeNull()
@@ -34,14 +34,14 @@ describe('createNode', () => {
   })
 
   it('rejects an unknown parent', async () => {
-    const repo = new InMemoryTreeRepository()
+    const repo = new InMemoryTreeStore().forUser('test-user')
     await expect(
       createNode(repo, { treeId: 't1', parentId: 'ghost', label: 'x', content: 'y' }, NOW),
     ).rejects.toThrow(/not found/)
   })
 
   it('clamps a proposed hardness on a deep leaf so it stays unprotected (the QR case)', async () => {
-    const repo = new InMemoryTreeRepository()
+    const repo = new InMemoryTreeStore().forUser('test-user')
     let parent = await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)
     for (const label of ['a', 'b', 'c', 'd']) {
       parent = await createNode(repo, { treeId: 't1', parentId: parent.id, label, content: 'x' }, NOW)

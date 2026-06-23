@@ -3,8 +3,8 @@ import type { Server } from 'node:http'
 import { z } from 'zod'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { InMemoryTreeRepository } from '../core/repository.js'
-import { InMemoryWorkflowRepository } from '../core/workflow-repository.js'
+import { InMemoryTreeStore } from '../core/repository.js'
+import { InMemoryWorkflowStore } from '../core/workflow-repository.js'
 import { createHttpServer } from './server.js'
 
 const TOKEN = 'test-token'
@@ -13,8 +13,8 @@ const fixedNow = (): Date => new Date('2026-01-01T00:00:00.000Z')
 let running: Server | undefined
 
 const startServer = async (): Promise<URL> => {
-  const repo = new InMemoryTreeRepository()
-  const workflows = new InMemoryWorkflowRepository()
+  const repo = new InMemoryTreeStore().forUser('test-user')
+  const workflows = new InMemoryWorkflowStore().forUser('test-user')
   const server = createHttpServer({ token: TOKEN, deps: { repo, workflows, now: fixedNow } })
   await new Promise<void>((resolve) => server.listen(0, () => resolve()))
   running = server
