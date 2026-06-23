@@ -15,20 +15,24 @@ pnpm dev                  # backend on :8722, web on :3000
 Open <http://localhost:3000>. The Nuxt dev server proxies `/api`, `/auth`, `/mcp` and `/trees`
 to the backend, so everything is one origin and the session cookie just works.
 
-### Logging in during development
+### How auth is wired
 
-The browser session cookie is set on whichever origin you browse, so for GitHub login to work
-through the dev proxy, the backend's `PUBLIC_URL` and your GitHub OAuth app must point at the
-**web** origin, not the backend port:
+`http://localhost:8722` is the backend only (MCP, `/auth`, `/api`, `/trees`). Users never hit
+it directly. The **web origin is the single front door**: in dev that is this Nuxt server on
+`http://localhost:3000`, which proxies `/auth`, `/api`, `/mcp` and `/trees` to the backend. In
+production nginx plays that role.
 
-1. In the repo-root `.env`, set `PUBLIC_URL=http://localhost:3000`.
-2. In your GitHub OAuth app (<https://github.com/settings/developers>), set
-   - Homepage URL: `http://localhost:3000`
-   - Authorization callback URL: `http://localhost:3000/auth/github/callback`
-3. Make sure port 3000 is free so Nuxt does not fall back to 3001 (which would break the match).
+The session cookie is bound to the origin the browser is on, so the whole OAuth flow has to run
+on the web origin. That is why `PUBLIC_URL` is `http://localhost:3000` (already set in
+`.env.example`), and the dev port is pinned to 3000 (`strictPort`, so it fails loudly rather
+than drifting to 3001).
 
-In production the same rule applies: `PUBLIC_URL` is the public front door (the nginx origin),
-and nginx proxies `/auth` and `/api` to the backend.
+The one manual step is your GitHub OAuth app (<https://github.com/settings/developers>):
+
+- Homepage URL: `http://localhost:3000`
+- Authorization callback URL: `http://localhost:3000/auth/github/callback`
+
+In production, set `PUBLIC_URL` to your public domain and register that domain's callback.
 
 ## Build
 

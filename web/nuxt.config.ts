@@ -5,7 +5,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-23',
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
-  vite: { plugins: [tailwindcss()] },
+  // Fixed dev port so it matches PUBLIC_URL; strictPort fails loudly instead of
+  // silently moving to 3001 (which would break the OAuth callback + session cookie).
+  devServer: { port: 3000 },
+  vite: { plugins: [tailwindcss()], server: { strictPort: true } },
   app: {
     head: {
       htmlAttrs: { lang: 'en' },
