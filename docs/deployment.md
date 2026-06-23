@@ -31,29 +31,37 @@ as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
 
 ---
 
-## 3. GitHub `production` environment: variables and secrets
+## 3. GitHub variables and secrets (repository vs environment)
 
-In your repository go to **Settings > Environments** and create an environment named `production`.
-GitHub keeps **Variables** (not sensitive, stored in clear, readable) separate from **Secrets**
-(sensitive, masked in logs). Put each value in its right bucket so the secret store holds only
-things that are actually secret.
+GitHub stores these at two levels, and on each level it separates **Variables** (not sensitive,
+readable) from **Secrets** (sensitive, masked in logs):
 
-**Variables** — _Settings > Environments > production > Add variable_:
+- **Repository level** — shared by every workflow and environment. Put the GHCR registry identity
+  here, it's the same regardless of where you deploy.
+- **Environment level (`production`)** — scoped to this one environment. Put the production deploy
+  target here, so a future `staging` could carry different values.
 
-| Variable | What to put in |
-| --- | --- |
-| `DEPLOY_HOST` | IP address or hostname of the server |
-| `DEPLOY_USER` | SSH user the action logs in as (e.g. `deploy`) |
-| `DEPLOY_PATH` | Absolute path on the server where Heartwood lives, e.g. `/opt/heartwood` |
-| `GHCR_USER` | Your GitHub username or the org that owns the packages (used for the server-side pull) |
+`vars.X` / `secrets.X` in the workflow resolve from whichever level holds them, so the names below
+are what matters, not the level.
 
-**Secrets** — _Settings > Environments > production > Add secret_:
+### Repository level — _Settings > Secrets and variables > Actions_
 
-| Secret | What to put in |
-| --- | --- |
-| `DEPLOY_SSH_KEY` | The **private** key (multiline PEM, including `-----BEGIN`/`-----END`) |
-| `GHCR_TOKEN` | A GitHub PAT with `read:packages` — only the **server pull** needs it; the image build+push uses the built-in `GITHUB_TOKEN` |
-| `DOTENV` | The **full content** of the prod `.env` file (see the template below) |
+| Kind | Name | What to put in |
+| --- | --- | --- |
+| Variable | `GHCR_USER` | Your GitHub username / the org that owns the packages (server-side pull) |
+| Secret | `GHCR_TOKEN` | A PAT with `read:packages` — only the **server pull** needs it; build+push uses the built-in `GITHUB_TOKEN` |
+
+### Environment `production` — _Settings > Environments > production_
+
+Create the environment named `production`, then add:
+
+| Kind | Name | What to put in |
+| --- | --- | --- |
+| Variable | `DEPLOY_HOST` | IP address or hostname of the server |
+| Variable | `DEPLOY_USER` | SSH user the action logs in as (e.g. `deploy`) |
+| Variable | `DEPLOY_PATH` | Absolute path on the server, e.g. `/opt/heartwood` |
+| Secret | `DEPLOY_SSH_KEY` | The **private** key (multiline PEM, including `-----BEGIN`/`-----END`) |
+| Secret | `DOTENV` | The **full content** of the prod `.env` file (see the template below) |
 
 > The build-and-push job logs in to GHCR with GitHub's built-in `GITHUB_TOKEN` (covered by the
 > workflow's `packages: write` permission), so you do **not** need a PAT for pushing. `GHCR_TOKEN`
