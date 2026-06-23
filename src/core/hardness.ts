@@ -78,3 +78,11 @@ export const computeHardness = (input: HardnessInput): HardnessResult => {
 
   return { structuralBase, floor, ceiling, effectiveHardness, clamp: clampKind, proposed, applied: effectiveHardness }
 }
+
+/** Builds a plain-language note when a hardnessSet proposal was clamped. */
+export const buildHardnessNote = (proposed: number, applied: number, clamp: 'raised-to-floor' | 'lowered-to-ceiling'): string => {
+  if (clamp === 'raised-to-floor') {
+    return `hardness set ${proposed} → ${applied}: a root is structurally hard, so it was raised.`
+  }
+  return `hardness set ${proposed} → ${applied}: this node is structurally light; hang it higher if it should be load-bearing.`
+}

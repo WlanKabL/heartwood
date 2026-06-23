@@ -1,4 +1,4 @@
-import { eq, and, ilike, or, sql } from 'drizzle-orm'
+import { eq, and, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { TreeNode } from '../core/types.js'
 import type { TreeStore, TreeRepository, TreeSummary } from '../core/repository.js'
@@ -138,7 +138,10 @@ class PostgresTreeRepository implements TreeRepository {
   }
 
   async searchNodes(treeId: string, query: string): Promise<TreeNode[]> {
-    const pattern = `%${query}%`
+    // Escape ILIKE special chars so a literal '%' or '_' in the query matches only itself.
+    // We use backslash as the escape character (declared via ESCAPE '\').
+    const escaped = query.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+    const pattern = `%${escaped}%`
     const rows = await this.db
       .select()
       .from(nodes)
@@ -146,7 +149,10 @@ class PostgresTreeRepository implements TreeRepository {
         and(
           eq(nodes.userId, this.userId),
           eq(nodes.treeId, treeId),
-          or(ilike(nodes.label, pattern), ilike(nodes.content, pattern)),
+          or(
+            sql`${nodes.label} ILIKE ${pattern} ESCAPE '\\'`,
+            sql`${nodes.content} ILIKE ${pattern} ESCAPE '\\'`,
+          ),
         ),
       )
     return rows.map(rowToNode)

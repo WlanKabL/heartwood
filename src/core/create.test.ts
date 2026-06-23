@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { InMemoryTreeStore } from './repository.js'
+import type { TreeRepository } from './repository.js'
 import { createNode } from './create.js'
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
@@ -177,5 +178,34 @@ describe('createNode', () => {
     // Only one node exists: the new one. It must not point at itself.
     expect(similarTo?.id).not.toBe(node.id)
     expect(similarTo).toBeUndefined()
+  })
+
+  // --- advisory resilience (Finding 1) ---
+
+  it('succeeds and returns the created node even when searchNodes throws (advisory dedup failure)', async () => {
+    const base = new InMemoryTreeStore().forUser('test-user')
+    // Build a stub repo whose searchNodes always rejects, simulating a DB hiccup.
+    const faultyRepo: TreeRepository = {
+      listNodes: (treeId) => base.listNodes(treeId),
+      getNode: (id) => base.getNode(id),
+      insertNode: (node) => base.insertNode(node),
+      updateNode: (node) => base.updateNode(node),
+      deleteNode: (id) => base.deleteNode(id),
+      listTreeIds: () => base.listTreeIds(),
+      listTreeSummaries: () => base.listTreeSummaries(),
+      deleteTree: (treeId) => base.deleteTree(treeId),
+      searchNodes: vi.fn().mockRejectedValue(new Error('DB hiccup')),
+    }
+    const result = await createNode(
+      faultyRepo,
+      { treeId: 't1', parentId: null, label: 'pricing model', content: 'subscription only' },
+      NOW,
+    )
+    // The node must be returned successfully.
+    expect(result.node).toBeDefined()
+    expect(result.node.label).toBe('pricing model')
+    // Advisory fields should be absent because the advisory step threw.
+    expect(result.similarTo).toBeUndefined()
+    // The promise must resolve, not reject.
   })
 })

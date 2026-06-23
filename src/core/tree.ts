@@ -89,6 +89,7 @@ const resolveFromIndex = (index: TreeIndex, nodeId: string, now: Date): Resolved
     ageDays: ageDaysBetween(node.lastConfirmedAt, now),
   })
   // Round to one decimal for stable, readable output. Internal computation stays full-precision.
+  // protected is derived from the unrounded value so that rounding can never flip the boundary.
   const effectiveHardness = Math.round(rawHardness * 10) / 10
   const children = (index.childrenOf.get(nodeId) ?? []).map((child) =>
     resolveFromIndex(index, child.id, now),
@@ -103,7 +104,7 @@ const resolveFromIndex = (index: TreeIndex, nodeId: string, now: Date): Resolved
     depthFromRoot,
     descendantWeight,
     effectiveHardness,
-    protected: effectiveHardness >= PROTECTION_THRESHOLD,
+    protected: rawHardness >= PROTECTION_THRESHOLD,
     children,
   }
 }

@@ -130,6 +130,30 @@ describe('ageDaysBetween', () => {
   })
 })
 
+describe('protected derived from unrounded hardness (Finding 2)', () => {
+  it('a node whose raw hardness is just under the threshold is not protected even when effectiveHardness rounds up to the threshold', () => {
+    // Construct a scenario where rawHardness lands in [59.95, 60):
+    //   depth=2, 0 descendants → structuralBase = 100 * 0.7^2 = 49
+    //   rawHardness = 49 + provenBonus
+    //   We want rawHardness = 59.97 → provenBonus = 10.97 → ageDays = 109.7
+    //   effectiveHardness (rounded) = round(59.97 * 10) / 10 = 60.0
+    //   protected (from raw) = 59.97 >= 60 → false
+    const lastConfirmedAt = '2026-01-01T00:00:00.000Z'
+    const ageDays = 109.7
+    const nowMs = new Date(lastConfirmedAt).getTime() + ageDays * 24 * 60 * 60 * 1000
+    const customNow = new Date(nowMs)
+
+    const treeNodes = [node('r', null), node('a', 'r'), node('b', 'a', { lastConfirmedAt })]
+    const tree = resolveTree(treeNodes, customNow)
+    const b = get(tree, 'b')
+
+    // Confirm the rounded value is at the threshold boundary.
+    expect(b.effectiveHardness).toBe(60)
+    // But protected must be false because the raw value is below PROTECTION_THRESHOLD.
+    expect(b.protected).toBe(false)
+  })
+})
+
 describe('effectiveHardness rounding', () => {
   it('resolved node effectiveHardness has at most one decimal place', () => {
     // Use a non-trivial age so internal computation produces a float like 64.50022...

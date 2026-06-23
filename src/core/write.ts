@@ -1,7 +1,7 @@
 import type { TreeRepository } from './repository.js'
 import type { ResolvedNode, TreeNode } from './types.js'
 import { resolveSubtree, buildTree, ageDaysBetween } from './tree.js'
-import { computeHardness } from './hardness.js'
+import { computeHardness, buildHardnessNote } from './hardness.js'
 
 /**
  * Returned INSTEAD of performing a change when a protected (or load-bearing) node is
@@ -43,14 +43,6 @@ export interface UpdateNodeResult {
   node: ResolvedNode
   /** Present only when the proposed hardnessSet was clamped by structural constraints. */
   hardnessNote?: string
-}
-
-/** Builds a plain-language note when a hardnessSet proposal was clamped. */
-const buildHardnessNote = (proposed: number, applied: number, clamp: 'raised-to-floor' | 'lowered-to-ceiling'): string => {
-  if (clamp === 'raised-to-floor') {
-    return `hardness set ${proposed} → ${applied}: a root is structurally hard, so it was raised.`
-  }
-  return `hardness set ${proposed} → ${applied}: this node is structurally light; hang it higher if it should be load-bearing.`
 }
 
 /** Edits a node's content, label or proposed hardness. Protected nodes need confirm. */

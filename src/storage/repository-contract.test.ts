@@ -154,6 +154,18 @@ const contract = (name: string, make: () => TreeRepository): void => {
       const hits = await repo.searchNodes('t1', 'identity')
       expect(hits.map((n) => n.id)).toEqual(['r1'])
     })
+
+    it('searchNodes treats a literal % in the query as a literal character, not a wildcard', async () => {
+      const repo = make()
+      // Insert one node whose content contains a literal '%'.
+      await repo.insertNode(node('r1', null, { label: 'discount', content: '50% off the first month' }))
+      // Insert another node that does NOT contain '%'.
+      await repo.insertNode(node('r2', 'r1', { label: 'full price', content: 'no discount applied' }))
+
+      // Searching for '%' should only match the node that contains the literal percent sign.
+      const hits = await repo.searchNodes('t1', '%')
+      expect(hits.map((n) => n.id)).toEqual(['r1'])
+    })
   })
 }
 
