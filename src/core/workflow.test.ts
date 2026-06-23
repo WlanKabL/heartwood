@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TreeNode } from './types.js'
-import { InMemoryTreeRepository } from './repository.js'
-import { InMemoryWorkflowRepository } from './workflow-repository.js'
+import { InMemoryTreeStore } from './repository.js'
+import { InMemoryWorkflowStore } from './workflow-repository.js'
 import { defineWorkflow, runWorkflow } from './workflow.js'
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -23,7 +23,7 @@ const node = (id: string, parentId: string | null, extra: Partial<TreeNode> = {}
 
 describe('defineWorkflow', () => {
   it('saves a workflow and preserves createdAt on update', async () => {
-    const repo = new InMemoryWorkflowRepository()
+    const repo = new InMemoryWorkflowStore().forUser('test-user')
     const first = await defineWorkflow(repo, { treeId: 't', name: 'plan_post', description: 'd', template: 'x' }, NOW)
     const later = new Date('2027-01-01T00:00:00.000Z')
     const second = await defineWorkflow(repo, { treeId: 't', name: 'plan_post', description: 'd2', template: 'y' }, later)
@@ -33,14 +33,14 @@ describe('defineWorkflow', () => {
   })
 
   it('rejects an invalid name', async () => {
-    const repo = new InMemoryWorkflowRepository()
+    const repo = new InMemoryWorkflowStore().forUser('test-user')
     await expect(
       defineWorkflow(repo, { treeId: 't', name: 'Bad Name!', description: 'd', template: 'x' }, NOW),
     ).rejects.toThrow(/invalid workflow name/)
   })
 
   it('rejects an empty template', async () => {
-    const repo = new InMemoryWorkflowRepository()
+    const repo = new InMemoryWorkflowStore().forUser('test-user')
     await expect(
       defineWorkflow(repo, { treeId: 't', name: 'a', description: 'd', template: '   ' }, NOW),
     ).rejects.toThrow(/template/)
@@ -49,9 +49,9 @@ describe('defineWorkflow', () => {
 
 describe('runWorkflow', () => {
   it('fills {{truths}} from the tree and {{input}} from the caller', async () => {
-    const treeRepo = new InMemoryTreeRepository()
+    const treeRepo = new InMemoryTreeStore().forUser('test-user')
     await treeRepo.insertNode(node('r', null, { content: 'the root truth' }))
-    const wfRepo = new InMemoryWorkflowRepository()
+    const wfRepo = new InMemoryWorkflowStore().forUser('test-user')
     await defineWorkflow(
       wfRepo,
       { treeId: 't1', name: 'draft', description: 'd', template: 'Truths:\n{{truths}}\n\nTask: {{ input }}' },
@@ -65,7 +65,12 @@ describe('runWorkflow', () => {
 
   it('throws on an unknown workflow', async () => {
     await expect(
-      runWorkflow(new InMemoryTreeRepository(), new InMemoryWorkflowRepository(), { treeId: 't', name: 'nope' }, NOW),
+      runWorkflow(
+        new InMemoryTreeStore().forUser('test-user'),
+        new InMemoryWorkflowStore().forUser('test-user'),
+        { treeId: 't', name: 'nope' },
+        NOW,
+      ),
     ).rejects.toThrow(/not found/)
   })
 })

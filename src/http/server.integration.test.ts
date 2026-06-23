@@ -1,26 +1,47 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import type { Server } from 'node:http'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { InMemoryTreeRepository } from '../core/repository.js'
-import { InMemoryWorkflowRepository } from '../core/workflow-repository.js'
-import { createHttpServer } from './server.js'
+import { buildServer } from './server.js'
+import { PostgresTreeStore } from '../storage/postgres-trees.js'
+import { PostgresWorkflowStore } from '../storage/postgres-workflows.js'
+import { generateToken } from '../auth/tokens.js'
+import { apiTokens } from '../storage/schema.js'
+import { setupPostgresTests, getDb, getUserA, getUserB } from '../storage/postgres-test-setup.js'
 
-const TOKEN = 'test-token'
 const fixedNow = (): Date => new Date('2026-01-01T00:00:00.000Z')
+const SESSION_SECRET = 'test-session-secret-at-least-32-chars-long'
 
-let running: Server | undefined
+setupPostgresTests()
+
+let running: FastifyInstance | undefined
+let tokenA = ''
+let tokenB = ''
+
+/** Seeds an api_tokens row for a user and returns the raw bearer token. */
+const seedToken = async (userId: string, name: string): Promise<string> => {
+  const { raw, hash, prefix } = generateToken()
+  await getDb().insert(apiTokens).values({ userId, name, tokenHash: hash, prefix })
+  return raw
+}
 
 const startServer = async (): Promise<URL> => {
-  const repo = new InMemoryTreeRepository()
-  const workflows = new InMemoryWorkflowRepository()
-  const server = createHttpServer({ token: TOKEN, deps: { repo, workflows, now: fixedNow } })
-  await new Promise<void>((resolve) => server.listen(0, () => resolve()))
-  running = server
-  const address = server.address()
+  const db = getDb()
+  const app = buildServer({
+    db,
+    treeStore: new PostgresTreeStore(db),
+    workflowStore: new PostgresWorkflowStore(db),
+    now: fixedNow,
+    sessionSecret: SESSION_SECRET,
+    github: { clientId: 'dummy-client-id', clientSecret: 'dummy-client-secret' },
+    publicUrl: 'http://localhost:8722',
+  })
+  await app.listen({ port: 0, host: '127.0.0.1' })
+  running = app
+  const address = app.server.address()
   if (address === null || typeof address === 'string') throw new Error('expected a TCP address')
-  return new URL(`http://localhost:${address.port}/mcp`)
+  return new URL(`http://127.0.0.1:${address.port}/mcp`)
 }
 
 const connect = async (url: URL, token: string): Promise<Client> => {
@@ -51,21 +72,34 @@ const parseOne = (result: unknown): z.infer<typeof NodeView> => NodeView.parse(J
 const parseForest = (result: unknown): z.infer<typeof NodeView>[] =>
   z.array(NodeView).parse(JSON.parse(textOf(result)))
 
+beforeEach(async () => {
+  // postgres-test-setup truncates + reseeds users before each test; mint fresh tokens.
+  tokenA = await seedToken(getUserA(), 'token-a')
+  tokenB = await seedToken(getUserB(), 'token-b')
+})
+
 afterEach(async () => {
-  const server = running
+  const app = running
   running = undefined
-  if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
+  if (app) await app.close()
 })
 
 describe('http + mcp end to end', () => {
   it('rejects a connection with a wrong token', async () => {
     const url = await startServer()
-    await expect(connect(url, 'wrong-token')).rejects.toThrow()
+    await expect(connect(url, 'hw_definitely-not-a-real-token')).rejects.toThrow()
+  })
+
+  it('rejects a connection with no token', async () => {
+    const url = await startServer()
+    const client = new Client({ name: 'integration-test', version: '1.0.0' })
+    const transport = new StreamableHTTPClientTransport(url)
+    await expect(client.connect(transport)).rejects.toThrow()
   })
 
   it('accepts a valid token and lists its tools', async () => {
     const url = await startServer()
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
       'create_node',
@@ -85,7 +119,7 @@ describe('http + mcp end to end', () => {
 
   it('creates a root via create_node and reads it back via get_tree', async () => {
     const url = await startServer()
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     const created = parseOne(
       await client.callTool({
         name: 'create_node',
@@ -102,7 +136,7 @@ describe('http + mcp end to end', () => {
 
   it('clamps a proposed hardness on a deep leaf created via the tool (the QR case)', async () => {
     const url = await startServer()
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     let parentId: string | null = null
     for (const label of ['root', 'a', 'b', 'c', 'd']) {
       const created = parseOne(
@@ -122,7 +156,7 @@ describe('http + mcp end to end', () => {
 
   it('gates an edit of a protected node behind confirm', async () => {
     const url = await startServer()
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     const root = parseOne(
       await client.callTool({
         name: 'create_node',
@@ -148,14 +182,14 @@ describe('http + mcp end to end', () => {
   it('serves the protected core over REST for the hook, bearer-gated', async () => {
     const url = await startServer()
     const base = `${url.protocol}//${url.host}`
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     await client.callTool({
       name: 'create_node',
       arguments: { treeId: 'h', parentId: null, label: 'identity', content: 'x' },
     })
     await client.close()
 
-    const res = await fetch(`${base}/trees/h/roots`, { headers: { authorization: `Bearer ${TOKEN}` } })
+    const res = await fetch(`${base}/trees/h/roots`, { headers: { authorization: `Bearer ${tokenA}` } })
     expect(res.status).toBe(200)
     const nodes = z.array(NodeView).parse(await res.json())
     expect(nodes.some((n) => n.label === 'identity')).toBe(true)
@@ -164,9 +198,38 @@ describe('http + mcp end to end', () => {
     expect(noauth.status).toBe(401)
   })
 
+  it('scopes the roots endpoint to the authenticated user', async () => {
+    const url = await startServer()
+    const base = `${url.protocol}//${url.host}`
+
+    // userA seeds a tree "shared" with their own identity node.
+    const clientA = await connect(url, tokenA)
+    await clientA.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'shared', parentId: null, label: 'identity-a', content: 'a' },
+    })
+    await clientA.close()
+
+    // userB seeds a same-named tree with a different node.
+    const clientB = await connect(url, tokenB)
+    await clientB.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'shared', parentId: null, label: 'identity-b', content: 'b' },
+    })
+    await clientB.close()
+
+    const resA = await fetch(`${base}/trees/shared/roots`, { headers: { authorization: `Bearer ${tokenA}` } })
+    const nodesA = z.array(NodeView).parse(await resA.json())
+    expect(nodesA.map((n) => n.label)).toEqual(['identity-a'])
+
+    const resB = await fetch(`${base}/trees/shared/roots`, { headers: { authorization: `Bearer ${tokenB}` } })
+    const nodesB = z.array(NodeView).parse(await resB.json())
+    expect(nodesB.map((n) => n.label)).toEqual(['identity-b'])
+  })
+
   it('exposes the workflow prompts and loads truths into them', async () => {
     const url = await startServer()
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     await client.callTool({
       name: 'create_node',
       arguments: { treeId: 'w', parentId: null, label: 'identity', content: 'the one truth' },
@@ -183,7 +246,7 @@ describe('http + mcp end to end', () => {
 
   it('defines a custom workflow and runs it with truths filled in', async () => {
     const url = await startServer()
-    const client = await connect(url, TOKEN)
+    const client = await connect(url, tokenA)
     await client.callTool({
       name: 'create_node',
       arguments: { treeId: 'c', parentId: null, label: 'identity', content: 'a person who values calm' },
