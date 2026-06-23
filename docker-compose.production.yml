@@ -1,0 +1,92 @@
+# Production Docker Compose — Heartwood
+# Uses pre-built images from GHCR.
+# Used by the CD pipeline. Do NOT build images locally with this file.
+#
+# Required .env variables:
+#   BACKEND_IMAGE    — e.g. ghcr.io/wlankabl/heartwood/backend
+#   FRONTEND_IMAGE   — e.g. ghcr.io/wlankabl/heartwood/frontend
+#   DEPLOY_TAG       — image tag, e.g. latest or a SHA
+#   POSTGRES_USER    — database user
+#   POSTGRES_PASSWORD — database password
+#   POSTGRES_DB      — database name
+#   SESSION_SECRET   — min 32 chars
+#   GITHUB_CLIENT_ID
+#   GITHUB_CLIENT_SECRET
+#   PUBLIC_URL       — public base URL of the backend, e.g. https://heartwood.example.com
+#   DATA_DIR         — (optional) host path for persistent data, defaults to ./data
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: heartwood-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ${DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ${BACKEND_IMAGE}:${DEPLOY_TAG}
+    container_name: heartwood-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SESSION_SECRET: ${SESSION_SECRET}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      PUBLIC_URL: ${PUBLIC_URL}
+      PORT: "8722"
+    ports:
+      - "3321:8722"
+    networks:
+      - internal
+      - web
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://localhost:8722/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    image: ${FRONTEND_IMAGE}:${DEPLOY_TAG}
+    container_name: heartwood-frontend
+    restart: unless-stopped
+    ports:
+      - "3320:3000"
+    networks:
+      - web
+    depends_on:
+      - backend
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    driver: bridge
