@@ -59,14 +59,34 @@ In a Claude Code chat with the server connected, the agent has four tools. A tre
 
 Watch the hardness fall as you go deeper. Try proposing `hardnessSet: 100` on a deep node: the server clamps it, and the node stays unprotected. Position decides, not the number.
 
-## The four tools
+## The tools
+
+Read:
 
 | Tool | Input | Returns |
 | --- | --- | --- |
 | `get_roots` | `{ treeId }` | the protected core (hardness >= 60), flat |
 | `get_tree` | `{ treeId }` | the forest (list of roots), nested, every node with hardness and `protected` |
 | `get_subtree` | `{ treeId, nodeId }` | one node and its descendants |
-| `create_node` | `{ treeId, parentId, label, content, hardnessSet? }` | the created node, resolved |
+
+Write (protected nodes need `confirm: true`, which returns a cascade preview first):
+
+| Tool | Input | Returns |
+| --- | --- | --- |
+| `create_node` | `{ treeId, parentId, label, content, hardnessSet? }` | the created node |
+| `update_node` | `{ treeId, nodeId, content?, label?, hardnessSet?, confirm? }` | the node, or a cascade preview |
+| `move_node` | `{ treeId, nodeId, newParentId, confirm? }` | the node, or a cascade preview |
+| `delete_node` | `{ treeId, nodeId, confirm? }` | the deleted ids, or a cascade preview |
+
+## Workflows
+
+Workflows are MCP prompts (slash-commands in Claude Code) that load the project's truths and lay out a standard procedure. The defaults are starting points, adapt them per project:
+
+| Workflow | Args | What it does |
+| --- | --- | --- |
+| `build_guide` | `{ treeId }` | how to author a coherent tree, with the current core loaded |
+| `plan_feature` | `{ treeId, feature }` | works a feature through a Definition of Ready and Done, grounded in the truths |
+| `check_consistency` | `{ treeId, draft }` | flags where a draft (copy, plan, decision) contradicts the truths |
 
 ## Scope (Phase 1)
 

@@ -157,4 +157,21 @@ describe('http + mcp end to end', () => {
     const noauth = await fetch(`${base}/trees/h/roots`)
     expect(noauth.status).toBe(401)
   })
+
+  it('exposes the workflow prompts and loads truths into them', async () => {
+    const url = await startServer()
+    const client = await connect(url, TOKEN)
+    await client.callTool({
+      name: 'create_node',
+      arguments: { treeId: 'w', parentId: null, label: 'identity', content: 'the one truth' },
+    })
+
+    const { prompts } = await client.listPrompts()
+    expect(prompts.map((p) => p.name).sort()).toEqual(['build_guide', 'check_consistency', 'plan_feature'])
+
+    const built = await client.getPrompt({ name: 'build_guide', arguments: { treeId: 'w' } })
+    const text = built.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
+    expect(text).toContain('the one truth')
+    await client.close()
+  })
 })

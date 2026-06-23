@@ -4,6 +4,7 @@ import type { TreeRepository } from '../core/repository.js'
 import { getResolvedTree, getResolvedSubtree, getProtectedNodes } from '../core/service.js'
 import { createNode } from '../core/create.js'
 import { updateNode, moveNode, deleteNode } from '../core/write.js'
+import { registerWorkflows } from './workflows.js'
 
 export interface McpDeps {
   repo: TreeRepository
@@ -199,6 +200,8 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
       }
     },
   )
+
+  registerWorkflows(server, deps)
 
   return server
 }
