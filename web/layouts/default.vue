@@ -29,7 +29,7 @@
           >GitHub</a
         >
         <a
-          href="https://wlankabl.dev"
+          href="https://wlankabl.com"
           class="transition-colors hover:text-ink"
           target="_blank"
           rel="noreferrer"

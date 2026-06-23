@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "start": "node --env-file-if-exists=.env --import tsx src/main.ts",
-    "dev": "tsx watch --env-file=.env src/main.ts",
+    "dev": "concurrently -k -n server,web -c blue,green \"pnpm run dev:server\" \"pnpm run dev:web\"",
+    "dev:server": "tsx watch --env-file=.env src/main.ts",
+    "dev:web": "pnpm -C web dev",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -32,6 +34,7 @@
   "devDependencies": {
     "@types/node": "^26.0.0",
     "@types/pg": "^8.20.0",
+    "concurrently": "^9.1.2",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
