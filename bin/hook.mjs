@@ -36,6 +36,7 @@ try {
     '- Add only DURABLE truths. If something changes often (a price, a metric, a percentage, a date, a current number), it does NOT belong here; put it in a decision-record document instead.',
     '- One node is one truth. Give a distinct theme its own root rather than overloading another.',
     '- Protected truths above are authoritative: do not contradict or change them without explicit human confirmation (confirm: true).',
+    '- When this session establishes a new durable truth about the project, capture it with create_node — the tree only stays useful if it is kept current.',
   ]
 
   process.stdout.write(

@@ -115,6 +115,56 @@ roots endpoint with the same token. In `.claude/settings.local.json`:
 The endpoint returns the protected core (the high-hardness truths) for the named tree, gated by
 the same bearer token. Swap `keeperlog` for whichever tree id you are working on.
 
+A better alternative is to use the `bin/hook.mjs` script that ships with Heartwood. It fetches
+the protected core and also prints a "Maintaining this tree" rules block that tells the agent to
+capture new durable truths during the session. Point the hook at the roots endpoint:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/path/to/heartwood/bin/hook.mjs http://localhost:8722 hw_your-minted-token keeperlog"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+To pair this with a gentle end-of-session reminder, add a `SessionEnd` hook using
+`bin/session-nudge.mjs`. It reads the `SessionEnd` payload from stdin, checks whether the
+session was substantive (transcript longer than ~40 lines), and if so prints one line reminding
+the human to capture any new durable truth with `create_node`:
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "prompt_input_exit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/path/to/heartwood/bin/session-nudge.mjs",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The nudge is deliberately gentle: it is a reminder shown to the human after the session ends, it
+never blocks, and it cannot cause a loop. Short or trivial sessions receive no output at all. On
+any error the hook exits 0 silently. The `SessionStart` hook also nudges the agent itself via
+the "Maintaining this tree" rules block, so both ends of the session reinforce the same habit.
+
 ## 6. Build the tree by hand
 
 In a Claude Code chat with the server connected, the agent has the tools below. A tree may have
