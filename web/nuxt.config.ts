@@ -33,6 +33,8 @@ export default defineNuxtConfig({
   // Marketing routes are prerendered for SEO; the app shell is client-only.
   routeRules: {
     '/': { prerender: true },
+    '/docs': { prerender: true },
+    '/wiki': { prerender: true },
     '/app/**': { ssr: false },
   },
   // Dev only: proxy backend paths so the SPA is same-origin in development.
