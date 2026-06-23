@@ -1,5 +1,5 @@
 import type { TreeNode, ResolvedNode } from './types.js'
-import { computeHardness } from './hardness.js'
+import { computeHardness, PROTECTION_THRESHOLD } from './hardness.js'
 
 const MS_PER_DAY = 86_400_000
 
@@ -12,15 +12,15 @@ export const ageDaysBetween = (lastConfirmedAt: string, now: Date): number => {
 interface TreeIndex {
   nodes: Map<string, TreeNode>
   childrenOf: Map<string, TreeNode[]>
-  rootId: string | null
+  rootIds: string[]
   depth: Map<string, number>
   descendantWeight: Map<string, number>
 }
 
 /**
- * Indexes a flat node list into a tree: resolves parent/child links, computes depth
- * from the root and load-bearing descendant weight. Throws on structural defects
- * (duplicate id, missing parent, not exactly one root, cycle, disconnected node).
+ * Indexes a flat node list into a forest: resolves parent/child links, computes depth
+ * from each root and load-bearing descendant weight. A tree may have several roots.
+ * Throws on structural defects (duplicate id, missing parent, cycle, disconnected node).
  */
 export const buildTree = (nodes: TreeNode[]): TreeIndex => {
   const byId = new Map<string, TreeNode>()
@@ -44,17 +44,15 @@ export const buildTree = (nodes: TreeNode[]): TreeIndex => {
     childrenOf.set(node.parentId, siblings)
   }
 
+  const depth = new Map<string, number>()
+  const descendantWeight = new Map<string, number>()
   if (nodes.length === 0) {
-    return { nodes: byId, childrenOf, rootId: null, depth: new Map(), descendantWeight: new Map() }
-  }
-  if (roots.length !== 1) {
-    throw new Error(`a tree must have exactly one root, found ${roots.length}`)
+    return { nodes: byId, childrenOf, rootIds: [], depth, descendantWeight }
   }
 
-  const root = roots[0]!
-  const depth = new Map<string, number>()
+  // BFS from every root (each root is depth 0). Detects cycles and disconnected nodes.
   const visited = new Set<string>()
-  const queue: Array<{ id: string; d: number }> = [{ id: root.id, d: 0 }]
+  const queue: Array<{ id: string; d: number }> = roots.map((root) => ({ id: root.id, d: 0 }))
   while (queue.length > 0) {
     const { id, d } = queue.shift()!
     if (visited.has(id)) throw new Error(`cycle detected at node ${id}`)
@@ -65,19 +63,18 @@ export const buildTree = (nodes: TreeNode[]): TreeIndex => {
     }
   }
   if (visited.size !== nodes.length) {
-    throw new Error('tree is disconnected: some nodes are unreachable from the root')
+    throw new Error('tree is disconnected: some nodes are unreachable from any root')
   }
 
-  const descendantWeight = new Map<string, number>()
   const weightOf = (id: string): number => {
     let total = 0
     for (const child of childrenOf.get(id) ?? []) total += 1 + weightOf(child.id)
     descendantWeight.set(id, total)
     return total
   }
-  weightOf(root.id)
+  for (const root of roots) weightOf(root.id)
 
-  return { nodes: byId, childrenOf, rootId: root.id, depth, descendantWeight }
+  return { nodes: byId, childrenOf, rootIds: roots.map((root) => root.id), depth, descendantWeight }
 }
 
 const resolveFromIndex = (index: TreeIndex, nodeId: string, now: Date): ResolvedNode => {
@@ -85,7 +82,7 @@ const resolveFromIndex = (index: TreeIndex, nodeId: string, now: Date): Resolved
   if (!node) throw new Error(`unknown node: ${nodeId}`)
   const depthFromRoot = index.depth.get(nodeId) ?? 0
   const descendantWeight = index.descendantWeight.get(nodeId) ?? 0
-  const { effectiveHardness, band } = computeHardness({
+  const { effectiveHardness } = computeHardness({
     depthFromRoot,
     descendantWeight,
     hardnessSet: node.hardnessSet,
@@ -104,16 +101,15 @@ const resolveFromIndex = (index: TreeIndex, nodeId: string, now: Date): Resolved
     depthFromRoot,
     descendantWeight,
     effectiveHardness,
-    band,
+    protected: effectiveHardness >= PROTECTION_THRESHOLD,
     children,
   }
 }
 
-/** Resolves the whole tree into the enriched, nested view. Returns null for an empty tree. */
-export const resolveTree = (nodes: TreeNode[], now: Date): ResolvedNode | null => {
+/** Resolves the whole forest into enriched, nested roots. Empty input returns []. */
+export const resolveTree = (nodes: TreeNode[], now: Date): ResolvedNode[] => {
   const index = buildTree(nodes)
-  if (index.rootId === null) return null
-  return resolveFromIndex(index, index.rootId, now)
+  return index.rootIds.map((id) => resolveFromIndex(index, id, now))
 }
 
 /** Resolves a single node and its descendants. */

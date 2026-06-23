@@ -5,16 +5,16 @@ import { resolveSubtree } from './tree.js'
 
 export interface CreateNodeInput {
   treeId: string
-  parentId: string | null // null = create the root
+  parentId: string | null // null = create a root (several roots are allowed)
   label: string
   content: string
   hardnessSet?: number | null // a proposal; the server clamps it to the structural band
 }
 
 /**
- * Adds a truth to a tree. Validates placement (one root per tree, parent must exist),
- * generates id and timestamps, persists, and returns the resolved node with its
- * server-computed hardness. A proposed hardness never decides the result; position does.
+ * Adds a truth to a tree. Validates that a non-null parent exists, generates id and
+ * timestamps, persists, and returns the resolved node with its server-computed hardness.
+ * A proposed hardness never decides the result; position does.
  */
 export const createNode = async (
   repo: TreeRepository,
@@ -23,11 +23,7 @@ export const createNode = async (
 ): Promise<ResolvedNode> => {
   const existing = await repo.listNodes(input.treeId)
 
-  if (input.parentId === null) {
-    if (existing.some((node) => node.parentId === null)) {
-      throw new Error(`tree ${input.treeId} already has a root`)
-    }
-  } else if (!existing.some((node) => node.id === input.parentId)) {
+  if (input.parentId !== null && !existing.some((node) => node.id === input.parentId)) {
     throw new Error(`parent ${input.parentId} not found in tree ${input.treeId}`)
   }
 

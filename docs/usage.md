@@ -24,7 +24,7 @@ It listens on `http://localhost:8722/mcp`. All config is via env:
 | `PORT` | no | 8722 | HTTP port |
 | `DB_PATH` | no | ./heartwood.db | SQLite file, or `:memory:` for ephemeral |
 
-The server refuses to start without a token, so it is never unauthenticated by accident.
+The server refuses to start without a token, so it is never unauthenticated by accident. `pnpm dev` does the same with auto-reload.
 
 ## 2. Connect from Claude Code
 
@@ -44,28 +44,30 @@ Add to your project's `.mcp.json` (or `~/.claude.json`):
 
 The token must match `HEARTWOOD_TOKEN`. A wrong or missing token is rejected with HTTP 401. That is the auth test: change the header to a wrong value and the server refuses every call.
 
-## 3. Build the first tree by hand
+> MCP servers are loaded when a Claude Code session starts. Add the config, then open a **new** chat so it picks up.
 
-In a Claude Code chat with the server connected, the agent has four tools. Build KeeperLog's tree through them, deepest truths first:
+## 3. Build the tree by hand
+
+In a Claude Code chat with the server connected, the agent has four tools. A tree may have **several roots** (a forest); use that instead of overloading one node. Build deepest, most stable truths as roots, details below them:
 
 1. `get_tree { "treeId": "keeperlog" }` is empty at first.
-2. Create the root:
+2. Create a root:
    `create_node { "treeId": "keeperlog", "parentId": null, "label": "identity", "content": "KeeperLog is a portable, handover-ready animal record for reptile and exotics keepers" }`
-   It comes back in band `root`.
-3. Create the trunk under the root (voice, positioning), then branches (features like QR handover), then leaves (details). Pass `parentId` = the id the parent returned.
-4. `get_tree` again returns the whole tree, each node with its server-computed `effectiveHardness` and `band`.
+   It comes back `protected: true`.
+3. Add more roots for the other top-level themes (voice, positioning, product/features, audiences), then nest details under each with `parentId` = the id the parent returned.
+4. `get_tree` returns the forest, each node with its server-computed `effectiveHardness` (0–100) and `protected` flag.
 
-Watch the hardness fall as you go deeper. Try proposing `hardnessSet: 100` on a leaf: the server clamps it into the leaf's band. Position decides, not the number.
+Watch the hardness fall as you go deeper. Try proposing `hardnessSet: 100` on a deep node: the server clamps it, and the node stays unprotected. Position decides, not the number.
 
 ## The four tools
 
 | Tool | Input | Returns |
 | --- | --- | --- |
-| `get_roots` | `{ treeId }` | the protected core (effective hardness >= 60), flat |
-| `get_tree` | `{ treeId }` | the full tree, nested, every node with hardness and band |
+| `get_roots` | `{ treeId }` | the protected core (hardness >= 60), flat |
+| `get_tree` | `{ treeId }` | the forest (list of roots), nested, every node with hardness and `protected` |
 | `get_subtree` | `{ treeId, nodeId }` | one node and its descendants |
 | `create_node` | `{ treeId, parentId, label, content, hardnessSet? }` | the created node, resolved |
 
 ## Scope (Phase 1)
 
-This is the single-user core: create plus read, one static token, no change-governance and no accounts. Editing protected nodes with cascade confirmation, and a multi-tenant account system with a registration frontend, are later phases (see [ROADMAP.md](../ROADMAP.md)).
+This is the single-user core: create plus read, one static token, no change-governance and no accounts. Editing protected nodes with cascade confirmation, a multi-tenant account system, and build-methodology guidance (how to author a coherent tree) are later phases (see [ROADMAP.md](../ROADMAP.md)).

@@ -14,7 +14,7 @@ describe('createNode', () => {
     )
     expect(root.parentId).toBeNull()
     expect(root.depthFromRoot).toBe(0)
-    expect(root.band).toBe('root')
+    expect(root.protected).toBe(true)
   })
 
   it('creates a child under an existing parent', async () => {
@@ -25,12 +25,12 @@ describe('createNode', () => {
     expect(child.depthFromRoot).toBe(1)
   })
 
-  it('rejects a second root', async () => {
+  it('allows several roots in the same tree', async () => {
     const repo = new InMemoryTreeRepository()
-    await createNode(repo, { treeId: 't1', parentId: null, label: 'r', content: 'x' }, NOW)
-    await expect(
-      createNode(repo, { treeId: 't1', parentId: null, label: 'r2', content: 'y' }, NOW),
-    ).rejects.toThrow(/already has a root/)
+    await createNode(repo, { treeId: 't1', parentId: null, label: 'identity', content: 'x' }, NOW)
+    const second = await createNode(repo, { treeId: 't1', parentId: null, label: 'voice', content: 'y' }, NOW)
+    expect(second.parentId).toBeNull()
+    expect(second.depthFromRoot).toBe(0)
   })
 
   it('rejects an unknown parent', async () => {
@@ -40,7 +40,7 @@ describe('createNode', () => {
     ).rejects.toThrow(/not found/)
   })
 
-  it('clamps a proposed hardness on a deep leaf so it cannot become a root (the QR case)', async () => {
+  it('clamps a proposed hardness on a deep leaf so it stays unprotected (the QR case)', async () => {
     const repo = new InMemoryTreeRepository()
     let parent = await createNode(repo, { treeId: 't1', parentId: null, label: 'root', content: 'x' }, NOW)
     for (const label of ['a', 'b', 'c', 'd']) {
@@ -51,7 +51,7 @@ describe('createNode', () => {
       { treeId: 't1', parentId: parent.id, label: 'qr', content: 'qr handover', hardnessSet: 100 },
       NOW,
     )
-    expect(leaf.band).toBe('leaf')
+    expect(leaf.protected).toBe(false)
     expect(leaf.effectiveHardness).toBeLessThan(50)
   })
 })

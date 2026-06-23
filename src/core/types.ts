@@ -1,6 +1,7 @@
 /**
  * Core domain types for the Heartwood truth tree.
  * A node's stored fields are explicit; its hardness is always derived server-side.
+ * A tree may have several roots (a forest); each root is its own depth-0 strand.
  */
 
 export type NodeStatus = 'active' | 'deprecated'
@@ -9,7 +10,7 @@ export type NodeStatus = 'active' | 'deprecated'
 export interface TreeNode {
   id: string
   treeId: string
-  parentId: string | null // null = the single root of the tree
+  parentId: string | null // null = a root of the tree (several roots are allowed)
   label: string // short name, e.g. "identity", "voice", "qr-handover"
   content: string // the actual truth
   hardnessSet: number | null // 0-100, human/AI *proposal*; null = derive only
@@ -19,13 +20,11 @@ export interface TreeNode {
   lastConfirmedAt: string // resets on edit; feeds the "proven" source
 }
 
-export type HardnessBand = 'leaf' | 'branch' | 'trunk' | 'root'
-
 /** Everything the hardness algorithm needs, decoupled from storage. */
 export interface HardnessInput {
-  depthFromRoot: number // distance to the root (0 = root)
+  depthFromRoot: number // distance to this node's root (0 = a root)
   descendantWeight: number // how much hangs below the node (load-bearing measure)
-  hardnessSet: number | null // the clamped-to-band proposal
+  hardnessSet: number | null // the proposal
   ageDays: number // days since lastConfirmedAt
 }
 
@@ -34,7 +33,6 @@ export interface HardnessResult {
   floor: number
   ceiling: number
   effectiveHardness: number
-  band: HardnessBand
 }
 
 /** A node enriched with its computed position and hardness, the view an agent receives. */
@@ -48,6 +46,6 @@ export interface ResolvedNode {
   depthFromRoot: number
   descendantWeight: number
   effectiveHardness: number
-  band: HardnessBand
+  protected: boolean // effectiveHardness >= PROTECTION_THRESHOLD: do not change without human confirmation
   children: ResolvedNode[]
 }

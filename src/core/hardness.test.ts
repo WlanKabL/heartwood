@@ -4,21 +4,16 @@ import { computeHardness } from './hardness.js'
 const base = { descendantWeight: 0, hardnessSet: null, ageDays: 0 }
 
 describe('computeHardness', () => {
-  it('a root (depth 0) is harder than a deep leaf', () => {
+  it('a node at a root is harder than a deep node', () => {
     const root = computeHardness({ ...base, depthFromRoot: 0 })
-    const leaf = computeHardness({ ...base, depthFromRoot: 5 })
-    expect(root.effectiveHardness).toBeGreaterThan(leaf.effectiveHardness)
+    const deep = computeHardness({ ...base, depthFromRoot: 5 })
+    expect(root.effectiveHardness).toBeGreaterThan(deep.effectiveHardness)
   })
 
-  it('bands map depth to the expected layer', () => {
-    expect(computeHardness({ ...base, depthFromRoot: 0 }).band).toBe('root')
-    expect(computeHardness({ ...base, depthFromRoot: 5 }).band).toBe('leaf')
-  })
-
-  it('a high hardnessSet cannot lift a leaf above its structural ceiling (the QR case)', () => {
-    const leaf = computeHardness({ ...base, depthFromRoot: 5, hardnessSet: 100 })
-    expect(leaf.effectiveHardness).toBeLessThanOrEqual(leaf.ceiling)
-    expect(leaf.band).not.toBe('root')
+  it('a high hardnessSet cannot lift a deep node above its structural ceiling (the QR case)', () => {
+    const deep = computeHardness({ ...base, depthFromRoot: 5, hardnessSet: 100 })
+    expect(deep.effectiveHardness).toBeLessThanOrEqual(deep.ceiling)
+    expect(deep.effectiveHardness).toBeLessThan(50)
   })
 
   it('more descendants harden a node at the same depth (load-bearing)', () => {

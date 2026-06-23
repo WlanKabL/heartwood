@@ -2,10 +2,10 @@
 
 > Technical design for the core. Concept lives in [../README.md](../README.md); build order in [../ROADMAP.md](../ROADMAP.md). This document is the Phase 0 deliverable: data model, hardness algorithm, API and layering, settled before feature code.
 
-## Decisions (Phase 0)
+## Decisions
 
 - **Stack:** Node + TypeScript, SQLite (Phase 1) → Postgres (multi-tenant). MCP via the official `@modelcontextprotocol/sdk`.
-- **One root per tree.** The root node is the project itself; core truths are its top-level children.
+- **Several roots allowed (a forest).** A tree may have multiple top-level truths; not everything has to hang off one node. Each root is its own depth-0 strand.
 - **Protection threshold:** `effectiveHardness >= 60` marks a node as protected (change requires cascade preview + explicit human YES).
 
 ## Layering
@@ -13,7 +13,7 @@
 Three layers, one direction of dependency. The core knows nothing about transports.
 
 1. **Core** — tree engine, storage, hardness computation. Protocol-agnostic, fully unit-tested.
-2. **MCP adapter** — thin facade exposing core operations as MCP tools (stdio in Phase 1).
+2. **MCP adapter** — thin facade exposing core operations as MCP tools.
 3. **HTTP API** — same core, second entrance. Arrives with accounts (Phase 3).
 
 Build the core once; hang any number of facades off it.
@@ -24,7 +24,7 @@ Build the core once; hang any number of facades off it.
 interface TreeNode {
   id: string
   treeId: string
-  parentId: string | null      // null = the single root of the tree
+  parentId: string | null      // null = a root of the tree (several roots allowed)
   label: string                // short name, e.g. "identity", "voice", "qr-handover"
   content: string              // the actual truth
   hardnessSet: number | null   // 0–100, human/AI *proposal*; null = derive only
@@ -37,9 +37,10 @@ interface TreeNode {
 
 Derived, never trusted from the client, always computed server-side:
 
-- `depthFromRoot` — distance to the root.
+- `depthFromRoot` — distance to this node's root (0 = a root).
 - `descendantWeight` — how much hangs below the node (load-bearing measure).
 - `effectiveHardness` — see below.
+- `protected` — `effectiveHardness >= 60`.
 
 ## Hardness algorithm
 
@@ -52,44 +53,40 @@ floor   = structuralBase * FLOOR_FACTOR                 // load-bearing nodes do
 effectiveHardness = clamp( blend(structuralBase, proven, clamp(set, 0, ceiling)), floor, ceiling )
 ```
 
-- `structuralBase` rises with closeness to the root **and** with `descendantWeight`. A node that carries a lot is hard regardless of any proposed number.
+- `structuralBase` rises with closeness to a root **and** with `descendantWeight`. A node that carries a lot is hard regardless of any proposed number.
 - `proven` rises with age since `lastConfirmedAt`. Confirmed-and-unchanged truths harden over time.
 - `set` is a **proposal** (from a human or an AI). The server clamps it into `[0, ceiling]`. It can nudge, never override.
 
 **Why position, not number.** A number is trivial for an AI to assert. Topology (where a node hangs, what hangs below it) is a structural fact a prompt cannot talk away. So the governance question is not "how hard is it" but "where may it hang", and the human answers that, not the prompt.
 
-**Worked example (the QR bug case).** "QR handover" hangs as a branch under "animal record". `structuralBase ≈ 40`, so `ceiling ≈ 55`. An AI may propose `set = 100`; the server clamps it to 55. The backend keeps the upper hand because position is authoritative.
+**Worked example (the QR bug case).** "QR handover" hangs deep under "positioning". Its `structuralBase` is low, so its `ceiling` is low. An AI may propose `set = 100`; the server clamps it. The backend keeps the upper hand because position is authoritative.
 
-### Hardness bands (labels over the number)
+### Hardness is a number, not a level label
 
-| Band   | Range  | Meaning                          |
-| ------ | ------ | -------------------------------- |
-| Leaf   | 0–25   | volatile detail, cheap to change |
-| Branch | 26–50  | feature / capability             |
-| Trunk  | 51–75  | direction, brand, positioning    |
-| Root   | 76–100 | constitutional truth             |
+There is deliberately **no** band label (leaf / branch / trunk / root). With several roots and load-bearing nodes, a depth-1 trunk can legitimately be harder than a shallow root, and a level label would lie. The structural level lives in `depthFromRoot`; how hard a truth is lives in `effectiveHardness` (0–100); the one actionable bit is `protected`. Position and hardness are related, not the same.
 
 ## Friction scales with depth (placement *and* change)
 
-- Creating a **leaf** is frictionless. The AI may do it on its own.
-- Placing or moving a node into a **hard position** (near the root) triggers confirmation, same as editing a protected node.
+- Creating a deep, low-hardness node is frictionless. The AI may do it on its own.
+- Placing or moving a node into a **hard position** (a root or near one) triggers confirmation, same as editing a protected node.
 - Editing a node with `effectiveHardness >= 60`: blocked until cascade preview (which descendants this invalidates) plus explicit human YES.
 
-This is the iron rule in practice: AI proposes, server enforces.
+This is the iron rule in practice: AI proposes, server enforces. (The change-side governance is Phase 2; create is open today.)
 
-## Read API / MCP tools (Phase 1)
+## MCP tools (Phase 1)
 
-| Operation        | Shape                                  | Returns                          |
-| ---------------- | -------------------------------------- | -------------------------------- |
-| `get_tree`       | `{ treeId }`                           | full tree, nested JSON           |
-| `get_subtree`    | `{ nodeId }`                           | subtree from a node              |
-| `get_by_scope`   | `{ treeId, label }`                    | nodes matching a scope/label     |
-| `get_roots`      | `{ treeId }`                           | the protected core, for the hook |
+| Tool          | Shape                                                 | Returns                                |
+| ------------- | ----------------------------------------------------- | -------------------------------------- |
+| `get_roots`   | `{ treeId }`                                          | the protected core, flat, for the hook |
+| `get_tree`    | `{ treeId }`                                          | the forest (list of roots), nested     |
+| `get_subtree` | `{ treeId, nodeId }`                                  | one node and its descendants           |
+| `create_node` | `{ treeId, parentId, label, content, hardnessSet? }`  | the created node, resolved             |
 
-Each node in a response carries `content`, `effectiveHardness`, its band, and `children`.
+Each node in a response carries `content`, `depthFromRoot`, `effectiveHardness`, `protected`, and `children`.
 
 ## Deferred to later phases
 
-- **Write path + governance** (propose node, cascade preview, root YES) — Phase 2.
+- **Write-side governance** (edit/move guard, cascade preview, root YES) — Phase 2.
 - **Validation gate** (check a planned output against the roots) — Phase 2.
-- **Accounts, multi-tenant, HTTP transport** — Phase 3.
+- **Accounts, multi-tenant** — Phase 3.
+- **Structure guidance / build methodology** (how to author a coherent tree: granularity, when a theme deserves its own root) — surfaced by dogfooding; belongs in a `get_guide` tool or an MCP prompt, not in tool descriptions.

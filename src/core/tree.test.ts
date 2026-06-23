@@ -19,21 +19,28 @@ const node = (id: string, parentId: string | null, extra: Partial<TreeNode> = {}
   ...extra,
 })
 
-/** Finds a node by id anywhere in a resolved tree, or undefined. */
-const find = (root: ResolvedNode | null, id: string): ResolvedNode | undefined => {
-  if (!root) return undefined
-  if (root.id === id) return root
-  for (const child of root.children) {
-    const hit = find(child, id)
+const findIn = (node: ResolvedNode, id: string): ResolvedNode | undefined => {
+  if (node.id === id) return node
+  for (const child of node.children) {
+    const hit = findIn(child, id)
+    if (hit) return hit
+  }
+  return undefined
+}
+
+/** Finds a node by id anywhere in a resolved forest, or undefined. */
+const find = (roots: ResolvedNode[], id: string): ResolvedNode | undefined => {
+  for (const root of roots) {
+    const hit = findIn(root, id)
     if (hit) return hit
   }
   return undefined
 }
 
 /** Like find, but throws when absent, so tests can read fields without a null guard. */
-const get = (root: ResolvedNode | null, id: string): ResolvedNode => {
-  const found = find(root, id)
-  if (!found) throw new Error(`node ${id} not found in resolved tree`)
+const get = (roots: ResolvedNode[], id: string): ResolvedNode => {
+  const found = find(roots, id)
+  if (!found) throw new Error(`node ${id} not found in resolved forest`)
   return found
 }
 
@@ -52,12 +59,18 @@ describe('buildTree / resolveTree', () => {
     expect(get(tree, 'b').descendantWeight).toBe(0)
   })
 
-  it('a root resolves to the root band and a deep leaf to the leaf band', () => {
+  it('flags a root as protected and a deep leaf as not', () => {
     const chain = ['r', 'a', 'b', 'c', 'd', 'e']
     const nodes = chain.map((id, i) => node(id, i === 0 ? null : chain[i - 1]!))
     const tree = resolveTree(nodes, NOW)
-    expect(get(tree, 'r').band).toBe('root')
-    expect(get(tree, 'e').band).toBe('leaf')
+    expect(get(tree, 'r').protected).toBe(true)
+    expect(get(tree, 'e').protected).toBe(false)
+  })
+
+  it('allows several roots (a forest)', () => {
+    const tree = resolveTree([node('r1', null), node('r2', null), node('a', 'r1')], NOW)
+    expect(tree.map((root) => root.id).sort()).toEqual(['r1', 'r2'])
+    expect(get(tree, 'a').depthFromRoot).toBe(1)
   })
 
   it('a load-bearing node is harder than a childless sibling at the same depth', () => {
@@ -74,7 +87,7 @@ describe('buildTree / resolveTree', () => {
   })
 
   it('an older node is harder than a fresh sibling (proven)', () => {
-    const later = new Date('2027-01-01T00:00:00.000Z') // one year after the stamps
+    const later = new Date('2027-01-01T00:00:00.000Z')
     const nodes = [
       node('r', null),
       node('fresh', 'r', { lastConfirmedAt: '2027-01-01T00:00:00.000Z' }),
@@ -88,16 +101,12 @@ describe('buildTree / resolveTree', () => {
     const nodes = [node('r', null), node('a', 'r'), node('b', 'a'), node('c', 'r')]
     const sub = resolveSubtree(nodes, 'a', NOW)
     expect(sub.id).toBe('a')
-    expect(find(sub, 'b')).toBeTruthy()
-    expect(find(sub, 'c')).toBeUndefined()
+    expect(findIn(sub, 'b')).toBeTruthy()
+    expect(findIn(sub, 'c')).toBeUndefined()
   })
 
-  it('an empty tree resolves to null', () => {
-    expect(resolveTree([], NOW)).toBeNull()
-  })
-
-  it('rejects more than one root', () => {
-    expect(() => resolveTree([node('r1', null), node('r2', null)], NOW)).toThrow(/exactly one root/)
+  it('an empty tree resolves to an empty forest', () => {
+    expect(resolveTree([], NOW)).toEqual([])
   })
 
   it('rejects a node with a missing parent', () => {
@@ -105,7 +114,6 @@ describe('buildTree / resolveTree', () => {
   })
 
   it('rejects a disconnected component', () => {
-    // x and y point at each other: no root reaches them
     const nodes = [node('r', null), node('x', 'y'), node('y', 'x')]
     expect(() => resolveTree(nodes, NOW)).toThrow()
   })

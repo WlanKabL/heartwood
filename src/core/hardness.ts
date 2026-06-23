@@ -1,4 +1,4 @@
-import type { HardnessInput, HardnessResult, HardnessBand } from './types.js'
+import type { HardnessInput, HardnessResult } from './types.js'
 
 /**
  * Hardness algorithm.
@@ -7,6 +7,9 @@ import type { HardnessInput, HardnessResult, HardnessBand } from './types.js'
  * modulate WITHIN the structurally allowed band. A single high source (e.g. an AI
  * proposing 100 for a leaf) can never win. The server, not the prompt, decides what
  * is hard.
+ *
+ * Output is a single number plus a protection flag. There is no level label: position
+ * lives in depthFromRoot, hardness lives in the number, and they are not the same thing.
  *
  * Constants are v1 and tunable; behaviour is pinned by tests, exact numbers are free.
  */
@@ -35,18 +38,10 @@ const descendantBonus = (descendantWeight: number): number =>
 const provenBonus = (ageDays: number): number =>
   Math.min(PROVEN_CAP, Math.max(0, ageDays) * PROVEN_PER_DAY)
 
-/** Maps a numeric hardness to its tree-layer label. */
-export const bandFor = (hardness: number): HardnessBand => {
-  if (hardness >= 76) return 'root'
-  if (hardness >= 51) return 'trunk'
-  if (hardness >= 26) return 'branch'
-  return 'leaf'
-}
-
 /**
- * Computes effective hardness. structuralBase comes from topology (closeness to root
- * plus load-bearing weight) and defines both the floor and the ceiling. The proposal
- * is clamped into the band before it can nudge; age adds a bounded bonus.
+ * Computes effective hardness. structuralBase comes from topology (closeness to a root
+ * plus load-bearing weight) and defines both the floor and the ceiling. The proposal is
+ * clamped into the band before it can nudge; age adds a bounded bonus.
  */
 export const computeHardness = (input: HardnessInput): HardnessResult => {
   const structuralBase = Math.min(
@@ -63,5 +58,5 @@ export const computeHardness = (input: HardnessInput): HardnessResult => {
   }
 
   const effectiveHardness = clamp(raw, floor, ceiling)
-  return { structuralBase, floor, ceiling, effectiveHardness, band: bandFor(effectiveHardness) }
+  return { structuralBase, floor, ceiling, effectiveHardness }
 }

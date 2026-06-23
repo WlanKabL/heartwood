@@ -30,7 +30,7 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
     'get_roots',
     {
       description:
-        'Return the protected core of a tree: the truths at or above the protection threshold. Load these first and treat them as authoritative. Do not contradict a high-hardness truth without explicit human confirmation.',
+        'Return the protected core of a tree: every node flagged protected (high hardness). Load these first and treat them as authoritative. Do not contradict a protected truth without explicit human confirmation.',
       inputSchema: { treeId: z.string() },
     },
     async ({ treeId }) => {
@@ -46,7 +46,7 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
     'get_tree',
     {
       description:
-        'Return the full truth tree for a project. Every node carries its content, server-computed effectiveHardness and band (leaf, branch, trunk, root).',
+        'Return the full truth tree for a project as a list of roots (a tree may have several). Every node carries its content, server-computed effectiveHardness (0-100), and a protected flag. depthFromRoot is the structural level; hardness is a separate number, not the level.',
       inputSchema: { treeId: z.string() },
     },
     async ({ treeId }) => {
@@ -76,8 +76,11 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
   server.registerTool(
     'create_node',
     {
-      description:
-        'Add a truth to a tree under a parent, or as the root with parentId null. Hardness is decided by the server from the node position; a proposed hardnessSet is clamped into the structurally allowed band and can never exceed it.',
+      description: [
+        'Add a truth to a tree. Set parentId to an existing node id to nest it, or null to start a new root; several roots are allowed.',
+        'Hardness is decided by the server from the node position: a proposed hardnessSet is clamped into the structurally allowed band and can never exceed it.',
+        'Structure guidance: one node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent.',
+      ].join(' '),
       inputSchema: {
         treeId: z.string(),
         parentId: z.string().nullable(),

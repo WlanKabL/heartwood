@@ -33,13 +33,21 @@ const connect = async (url: URL, token: string): Promise<Client> => {
 const ToolResult = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
 })
-const NodeView = z.object({ id: z.string(), label: z.string(), band: z.string() })
+const NodeView = z.object({
+  id: z.string(),
+  label: z.string(),
+  effectiveHardness: z.number(),
+  protected: z.boolean(),
+})
 
-const parseNode = (result: unknown): z.infer<typeof NodeView> => {
+const textOf = (result: unknown): string => {
   const first = ToolResult.parse(result).content[0]
   if (!first || first.type !== 'text' || first.text === undefined) throw new Error('expected text content')
-  return NodeView.parse(JSON.parse(first.text))
+  return first.text
 }
+const parseOne = (result: unknown): z.infer<typeof NodeView> => NodeView.parse(JSON.parse(textOf(result)))
+const parseForest = (result: unknown): z.infer<typeof NodeView>[] =>
+  z.array(NodeView).parse(JSON.parse(textOf(result)))
 
 afterEach(async () => {
   const server = running
@@ -61,20 +69,20 @@ describe('http + mcp end to end', () => {
     await client.close()
   })
 
-  it('creates the root via create_node and reads it back via get_tree', async () => {
+  it('creates a root via create_node and reads it back via get_tree', async () => {
     const url = await startServer()
     const client = await connect(url, TOKEN)
-    const created = parseNode(
+    const created = parseOne(
       await client.callTool({
         name: 'create_node',
         arguments: { treeId: 'keeperlog', parentId: null, label: 'identity', content: 'portable animal record' },
       }),
     )
-    expect(created.band).toBe('root')
+    expect(created.protected).toBe(true)
 
-    const tree = parseNode(await client.callTool({ name: 'get_tree', arguments: { treeId: 'keeperlog' } }))
-    expect(tree.label).toBe('identity')
-    expect(tree.band).toBe('root')
+    const forest = parseForest(await client.callTool({ name: 'get_tree', arguments: { treeId: 'keeperlog' } }))
+    expect(forest).toHaveLength(1)
+    expect(forest[0]?.label).toBe('identity')
     await client.close()
   })
 
@@ -83,18 +91,18 @@ describe('http + mcp end to end', () => {
     const client = await connect(url, TOKEN)
     let parentId: string | null = null
     for (const label of ['root', 'a', 'b', 'c', 'd']) {
-      const created = parseNode(
+      const created = parseOne(
         await client.callTool({ name: 'create_node', arguments: { treeId: 't', parentId, label, content: 'x' } }),
       )
       parentId = created.id
     }
-    const leaf = parseNode(
+    const leaf = parseOne(
       await client.callTool({
         name: 'create_node',
         arguments: { treeId: 't', parentId, label: 'qr', content: 'qr', hardnessSet: 100 },
       }),
     )
-    expect(leaf.band).toBe('leaf')
+    expect(leaf.protected).toBe(false)
     await client.close()
   })
 })

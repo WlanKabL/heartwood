@@ -29,10 +29,17 @@ const seed = async (...nodes: TreeNode[]): Promise<InMemoryTreeRepository> => {
 describe('service over InMemoryTreeRepository', () => {
   it('resolves a stored tree with computed hardness', async () => {
     const repo = await seed(node('r', null), node('a', 'r'))
-    const tree = await getResolvedTree(repo, 't1', NOW)
-    expect(tree?.id).toBe('r')
-    expect(tree?.band).toBe('root')
-    expect(tree?.children[0]?.id).toBe('a')
+    const roots = await getResolvedTree(repo, 't1', NOW)
+    expect(roots).toHaveLength(1)
+    expect(roots[0]?.id).toBe('r')
+    expect(roots[0]?.protected).toBe(true)
+    expect(roots[0]?.children[0]?.id).toBe('a')
+  })
+
+  it('resolves several roots as a forest', async () => {
+    const repo = await seed(node('r1', null), node('r2', null), node('a', 'r1'))
+    const roots = await getResolvedTree(repo, 't1', NOW)
+    expect(roots.map((r) => r.id).sort()).toEqual(['r1', 'r2'])
   })
 
   it('resolves a subtree from storage', async () => {
@@ -42,15 +49,15 @@ describe('service over InMemoryTreeRepository', () => {
     expect(sub.children[0]?.id).toBe('b')
   })
 
-  it('returns null for an unknown or empty tree', async () => {
+  it('returns an empty forest for an unknown or empty tree', async () => {
     const repo = new InMemoryTreeRepository()
-    expect(await getResolvedTree(repo, 'nope', NOW)).toBeNull()
+    expect(await getResolvedTree(repo, 'nope', NOW)).toEqual([])
   })
 
   it('isolates nodes by tree id', async () => {
     const repo = await seed(node('r1', null), node('r2', null, { treeId: 't2' }))
-    expect((await getResolvedTree(repo, 't1', NOW))?.id).toBe('r1')
-    expect((await getResolvedTree(repo, 't2', NOW))?.id).toBe('r2')
+    expect((await getResolvedTree(repo, 't1', NOW)).map((r) => r.id)).toEqual(['r1'])
+    expect((await getResolvedTree(repo, 't2', NOW)).map((r) => r.id)).toEqual(['r2'])
   })
 
   it('rejects duplicate inserts', async () => {
@@ -58,7 +65,7 @@ describe('service over InMemoryTreeRepository', () => {
     await expect(repo.insertNode(node('r', null))).rejects.toThrow(/duplicate/)
   })
 
-  it('returns only nodes above the protection threshold, flattened', async () => {
+  it('returns only protected nodes, flattened', async () => {
     const repo = await seed(node('r', null), node('a', 'r'), node('deep', 'a'))
     const core = await getProtectedNodes(repo, 't1', NOW)
     expect(core.every((n) => n.children.length === 0)).toBe(true)
