@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ResolvedNode } from '~/types/tree'
 import { hardnessColor } from '~/types/tree'
-import { createTreeNode } from '~/composables/treeApi'
+import { createTreeNode, deleteTree } from '~/composables/treeApi'
+import type { ConfirmState } from '~/components/app/ConfirmDialog.vue'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
 
@@ -128,6 +129,42 @@ const onSheetUp = (): void => {
   sheetY.value = 0
   if (dismiss) choose(null)
 }
+
+// Delete the whole tree: preview the node count first, then confirm, then back to the forest.
+const deleteState = ref<ConfirmState | null>(null)
+const deleteBusy = ref(false)
+
+const askDeleteTree = async (): Promise<void> => {
+  try {
+    const res = await deleteTree(treeId.value, false)
+    if ('requiresConfirmation' in res) {
+      deleteState.value = {
+        title: `Delete the tree "${treeId.value}"`,
+        message: `This permanently removes the whole tree and all ${res.nodeCount} truth${
+          res.nodeCount === 1 ? '' : 's'
+        } in it. This cannot be undone.`,
+        affected: [],
+        danger: true,
+        confirmLabel: 'Delete tree',
+      }
+    }
+  } catch {
+    // a failed preview changes nothing; better to show no dialog than a dead one
+  }
+}
+
+const confirmDeleteTree = async (): Promise<void> => {
+  if (deleteBusy.value) return
+  deleteBusy.value = true
+  try {
+    await deleteTree(treeId.value, true)
+    await navigateTo('/app')
+  } catch {
+    deleteState.value = null
+  } finally {
+    deleteBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -196,6 +233,12 @@ const onSheetUp = (): void => {
           @click="addingRoot = true"
         >
           + root
+        </button>
+        <button
+          class="rounded-sm border border-line px-3 py-1.5 font-mono text-[0.72rem] text-rust hover:border-rust"
+          @click="askDeleteTree"
+        >
+          delete tree
         </button>
       </div>
     </div>
@@ -362,5 +405,13 @@ const onSheetUp = (): void => {
         </div>
       </form>
     </div>
+
+    <AppConfirmDialog
+      v-if="deleteState"
+      :state="deleteState"
+      :busy="deleteBusy"
+      @confirm="confirmDeleteTree"
+      @cancel="deleteState = null"
+    />
   </div>
 </template>

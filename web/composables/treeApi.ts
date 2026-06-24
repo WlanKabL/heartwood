@@ -48,3 +48,23 @@ export const deleteTreeNode = (
     `/api/trees/${enc(treeId)}/nodes/${enc(nodeId)}?confirm=${confirm}`,
     { method: 'DELETE' },
   )
+
+export interface TreeDeletePreview {
+  requiresConfirmation: true
+  treeId: string
+  nodeCount: number
+}
+export interface TreeDeleted {
+  deleted: string
+  removed: number
+}
+
+// Delete an entire tree. Without confirm the backend returns a preview with the node count;
+// with confirm it removes the tree and all its truths.
+export const deleteTree = (
+  treeId: string,
+  confirm = false,
+): Promise<TreeDeletePreview | TreeDeleted> =>
+  $fetch<TreeDeletePreview | TreeDeleted>(`/api/trees/${enc(treeId)}?confirm=${confirm}`, {
+    method: 'DELETE',
+  })
