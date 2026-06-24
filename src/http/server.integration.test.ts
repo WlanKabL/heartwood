@@ -248,11 +248,21 @@ describe('http + mcp end to end', () => {
     })
 
     const { prompts } = await client.listPrompts()
-    expect(prompts.map((p) => p.name).sort()).toEqual(['build_guide', 'check_consistency', 'run_workflow'])
+    expect(prompts.map((p) => p.name).sort()).toEqual([
+      'build_guide',
+      'check_consistency',
+      'init_tree',
+      'run_workflow',
+    ])
 
     const built = await client.getPrompt({ name: 'build_guide', arguments: { treeId: 'w' } })
     const text = built.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
     expect(text).toContain('the one truth')
+
+    const init = await client.getPrompt({ name: 'init_tree' })
+    const initText = init.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
+    expect(initText).toContain('list_trees')
+    expect(initText).toContain('my-project')
     await client.close()
   })
 

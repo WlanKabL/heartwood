@@ -83,6 +83,7 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
     {
       description: [
         'Add a truth to a tree. Set parentId to an existing node id to nest it, or null to start a new root; several roots are allowed.',
+        'treeId is the project this truth belongs to. Use the project\'s real short name in kebab-case (e.g. "keeperlog", "zentrax"), NEVER a placeholder like "my-project", "project", "default" or "test". Call list_trees first: if a tree for this project already exists, reuse its exact id; only mint a new id for a genuinely new project. If you are unsure what the project is called, ask the human before creating the first node.',
         'label is a short title for the truth (e.g. "voice", "pricing-model"). content is the single truth itself, written as a durable statement.',
         'Hardness is decided by the server from the node position: a proposed hardnessSet is only a hint.',
         'The server clamps it into the structurally allowed band and may RAISE it to a floor (roots are always hard) or LOWER it to a ceiling (a shallow leaf cannot be softer than its load demands).',

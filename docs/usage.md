@@ -229,8 +229,11 @@ Workflows are MCP prompts (slash-commands) that load the project's truths and la
 
 | Prompt | Args | What it does |
 | --- | --- | --- |
-| `build_guide` | `{ treeId }` | how to author a coherent tree, with the current core loaded |
+| `init_tree` | none | first-time setup for a project with no tree yet: pick a real treeId, understand the project, ask only as much as the gap demands, build roots first |
+| `build_guide` | `{ treeId }` | thorough rules for authoring a coherent tree, with the current core loaded |
 | `check_consistency` | `{ treeId, draft }` | flags where a draft (copy, plan, message, decision) contradicts the truths |
+
+Starting a brand-new project? Run `/init_tree` first to choose the treeId and shape the roots, then `/build_guide` to keep authoring with the full ruleset.
 
 The rest are **yours**. Define your own with the `define_workflow` tool, then run them:
 
@@ -252,8 +255,9 @@ Then `run_workflow name="plan_post" input="the new collab"` returns the ready-to
 
 ## Scope
 
-This is the multi-tenant core: GitHub login, per-account API tokens, and tenant-scoped trees on
-Postgres, with cascade-confirmed editing of protected nodes. Every store instance is bound to a
-`userId`, so isolation cannot be forgotten and is enforced at the HTTP/MCP boundary (see
-`src/http/isolation.test.ts`). Build-methodology guidance (how to author a coherent tree) and
-richer governance are later phases (see [ROADMAP.md](../ROADMAP.md)).
+This is the multi-tenant core, live in production: GitHub login, per-account API tokens, and
+tenant-scoped trees on Postgres, with cascade-confirmed editing of protected nodes. Every store
+instance is bound to a `userId`, so isolation cannot be forgotten and is enforced at the HTTP/MCP
+boundary (see `src/http/isolation.test.ts`). Build-methodology guidance ships as the `init_tree`
+and `build_guide` prompts above. The one remaining phase is opening up (OSS release, public
+trees); see [ROADMAP.md](../ROADMAP.md).
