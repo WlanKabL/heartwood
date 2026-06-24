@@ -6,6 +6,7 @@ import fastifySecureSession from '@fastify/secure-session'
 import { setupPostgresTests, getDb, getUserA, getUserB } from '../storage/postgres-test-setup.js'
 import { setUserSession } from '../auth/session.js'
 import { PostgresTreeStore } from '../storage/postgres-trees.js'
+import { PostgresWorkflowStore } from '../storage/postgres-workflows.js'
 import { registerTreeRoutes } from './tree-routes.js'
 import type { TreeNode } from '../core/types.js'
 
@@ -23,7 +24,11 @@ const buildApp = () => {
     setUserSession(reply, request.params.userId)
     return reply.code(200).send({ ok: true })
   })
-  registerTreeRoutes(app, { treeStore: new PostgresTreeStore(getDb()), now: fixedNow })
+  registerTreeRoutes(app, {
+    treeStore: new PostgresTreeStore(getDb()),
+    workflowStore: new PostgresWorkflowStore(getDb()),
+    now: fixedNow,
+  })
   return app
 }
 
@@ -385,6 +390,114 @@ describe('write isolation', () => {
     const after = await app.inject({ method: 'GET', url: '/api/trees/kl', headers: { cookie: cookieA } })
     const forest = after.json<{ content: string }[]>()
     expect(forest[0]!.content).toBe('a-original')
+    await app.close()
+  })
+})
+
+describe('workflows', () => {
+  it('defines, lists, runs and deletes a workflow', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+
+    // a protected root so {{truths}} has something to render
+    await createNodeReq(app, cookie, 'kl', {
+      parentId: null,
+      label: 'identity',
+      content: 'the core truth',
+    })
+
+    const defined = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/workflows',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: {
+        name: 'plan_post',
+        description: 'plan an on-brand post',
+        template: 'Truths:\n{{truths}}\n\nPlan: {{input}}',
+      },
+    })
+    expect(defined.statusCode).toBe(200)
+    expect(defined.json<{ name: string }>().name).toBe('plan_post')
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/trees/kl/workflows',
+      headers: { cookie },
+    })
+    expect(listed.json<{ name: string }[]>().map((w) => w.name)).toEqual(['plan_post'])
+
+    const ran = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/workflows/plan_post/run',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { input: 'the launch' },
+    })
+    expect(ran.statusCode).toBe(200)
+    const text = ran.json<{ text: string }>().text
+    expect(text).toContain('the core truth')
+    expect(text).toContain('the launch')
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: '/api/trees/kl/workflows/plan_post',
+      headers: { cookie },
+    })
+    expect(deleted.statusCode).toBe(200)
+    const afterList = await app.inject({
+      method: 'GET',
+      url: '/api/trees/kl/workflows',
+      headers: { cookie },
+    })
+    expect(afterList.json()).toEqual([])
+    await app.close()
+  })
+
+  it('rejects an invalid workflow name', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/workflows',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { name: 'Bad Name', description: '', template: 'x' },
+    })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('returns 404 running a missing workflow', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookie = await loginAs(app, getUserA())
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/workflows/nope/run',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('does not show another user workflows (isolation)', async () => {
+    const app = buildApp()
+    await app.ready()
+    const cookieB = await loginAs(app, getUserB())
+    await app.inject({
+      method: 'POST',
+      url: '/api/trees/kl/workflows',
+      headers: { cookie: cookieB, 'content-type': 'application/json' },
+      payload: { name: 'secret', description: '', template: 'x' },
+    })
+    const cookieA = await loginAs(app, getUserA())
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/trees/kl/workflows',
+      headers: { cookie: cookieA },
+    })
+    expect(res.json()).toEqual([])
     await app.close()
   })
 })

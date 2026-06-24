@@ -180,6 +180,11 @@ const confirmDeleteTree = async (): Promise<void> => {
           <span><b class="text-ink">{{ stats.protected }}</b> protected</span>
           <span>hardest <b class="text-rust">{{ stats.hardest }}</b></span>
         </div>
+        <NuxtLink
+          :to="`/app/workflows/${encodeURIComponent(treeId)}`"
+          class="font-mono text-[0.72rem] text-rust hover:text-ink"
+          >workflows →</NuxtLink
+        >
       </div>
 
       <div class="flex flex-wrap items-center justify-end gap-3">

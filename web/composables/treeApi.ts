@@ -68,3 +68,40 @@ export const deleteTree = (
   $fetch<TreeDeletePreview | TreeDeleted>(`/api/trees/${enc(treeId)}?confirm=${confirm}`, {
     method: 'DELETE',
   })
+
+// ── Workflows ──────────────────────────────────────────────────────────────
+
+export interface Workflow {
+  treeId: string
+  name: string
+  description: string
+  template: string
+  createdAt: string
+  updatedAt: string
+}
+export interface DefineWorkflowBody {
+  name: string
+  description: string
+  template: string
+}
+
+export const listWorkflows = (treeId: string): Promise<Workflow[]> =>
+  $fetch<Workflow[]>(`/api/trees/${enc(treeId)}/workflows`)
+
+export const defineWorkflow = (treeId: string, body: DefineWorkflowBody): Promise<Workflow> =>
+  $fetch<Workflow>(`/api/trees/${enc(treeId)}/workflows`, { method: 'POST', body })
+
+export const deleteWorkflow = (treeId: string, name: string): Promise<{ deleted: string }> =>
+  $fetch<{ deleted: string }>(`/api/trees/${enc(treeId)}/workflows/${enc(name)}`, {
+    method: 'DELETE',
+  })
+
+export const runWorkflow = (
+  treeId: string,
+  name: string,
+  input?: string,
+): Promise<{ text: string }> =>
+  $fetch<{ text: string }>(`/api/trees/${enc(treeId)}/workflows/${enc(name)}/run`, {
+    method: 'POST',
+    body: { input },
+  })

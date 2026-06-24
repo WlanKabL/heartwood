@@ -9,7 +9,9 @@ import {
 } from '../core/service.js'
 import { createNode } from '../core/create.js'
 import { updateNode, moveNode, deleteNode } from '../core/write.js'
+import { defineWorkflow, runWorkflow } from '../core/workflow.js'
 import type { TreeStore } from '../core/repository.js'
+import type { WorkflowStore } from '../core/workflow-repository.js'
 
 // ---------------------------------------------------------------------------
 // Fastify request augmentation — typed per-request userId for the tree routes.
@@ -27,6 +29,7 @@ declare module 'fastify' {
 
 export interface TreeRouteDeps {
   treeStore: TreeStore
+  workflowStore: WorkflowStore
   now: () => Date
 }
 
@@ -49,6 +52,14 @@ const updateBody = z.object({
 const moveBody = z.object({
   newParentId: z.string().nullable(),
   confirm: z.boolean().optional(),
+})
+const workflowBody = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  template: z.string().min(1),
+})
+const runBody = z.object({
+  input: z.string().optional(),
 })
 
 /** Runs a core use-case and maps thrown domain errors to 404 (not found) or 400. */
@@ -85,6 +96,7 @@ export const registerTreeRoutes = (app: FastifyInstance, deps: TreeRouteDeps): v
   app.decorateRequest('treeUserId', '')
   const guard = requireSession()
   const repoFor = (request: FastifyRequest) => deps.treeStore.forUser(request.treeUserId)
+  const wfRepoFor = (request: FastifyRequest) => deps.workflowStore.forUser(request.treeUserId)
 
   // GET /api/trees — the user's trees with node counts.
   app.get('/api/trees', { preHandler: guard }, async (request, reply) => {
@@ -219,6 +231,75 @@ export const registerTreeRoutes = (app: FastifyInstance, deps: TreeRouteDeps): v
       }
       const removed = await deleteTree(repo, treeId)
       return reply.send({ deleted: treeId, removed })
+    },
+  )
+
+  // ── Workflows ────────────────────────────────────────────────────────────
+  // A REST facade over the same workflow use-cases the MCP tools expose, so the
+  // web UI can manage workflows. Storage is the per-user workflow store.
+
+  // GET /api/trees/:treeId/workflows — this tree's workflows.
+  app.get<{ Params: { treeId: string } }>(
+    '/api/trees/:treeId/workflows',
+    { preHandler: guard },
+    async (request, reply) => {
+      return reply.send(await wfRepoFor(request).listWorkflows(request.params.treeId))
+    },
+  )
+
+  // POST /api/trees/:treeId/workflows — create or update a workflow (upsert by name).
+  app.post<{ Params: { treeId: string } }>(
+    '/api/trees/:treeId/workflows',
+    { preHandler: guard },
+    async (request, reply) => {
+      const parsed = workflowBody.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'invalid body', issues: parsed.error.issues })
+      }
+      return sendOrFail(reply, () =>
+        defineWorkflow(
+          wfRepoFor(request),
+          {
+            treeId: request.params.treeId,
+            name: parsed.data.name,
+            description: parsed.data.description,
+            template: parsed.data.template,
+          },
+          deps.now(),
+        ),
+      )
+    },
+  )
+
+  // DELETE /api/trees/:treeId/workflows/:name — remove a workflow.
+  app.delete<{ Params: { treeId: string; name: string } }>(
+    '/api/trees/:treeId/workflows/:name',
+    { preHandler: guard },
+    async (request, reply) => {
+      return sendOrFail(reply, async () => {
+        await wfRepoFor(request).deleteWorkflow(request.params.treeId, request.params.name)
+        return { deleted: request.params.name }
+      })
+    },
+  )
+
+  // POST /api/trees/:treeId/workflows/:name/run — fill the template with truths + input.
+  app.post<{ Params: { treeId: string; name: string } }>(
+    '/api/trees/:treeId/workflows/:name/run',
+    { preHandler: guard },
+    async (request, reply) => {
+      const parsed = runBody.safeParse(request.body ?? {})
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'invalid body', issues: parsed.error.issues })
+      }
+      return sendOrFail(reply, async () => ({
+        text: await runWorkflow(
+          repoFor(request),
+          wfRepoFor(request),
+          { treeId: request.params.treeId, name: request.params.name, input: parsed.data.input },
+          deps.now(),
+        ),
+      }))
     },
   )
 }

@@ -59,7 +59,11 @@ export const buildServer = (deps: ServerDeps): FastifyInstance => {
 
   registerApiRoutes(app, { db: deps.db })
 
-  registerTreeRoutes(app, { treeStore: deps.treeStore, now: deps.now })
+  registerTreeRoutes(app, {
+    treeStore: deps.treeStore,
+    workflowStore: deps.workflowStore,
+    now: deps.now,
+  })
 
   registerPages(app, { db: deps.db })
 
