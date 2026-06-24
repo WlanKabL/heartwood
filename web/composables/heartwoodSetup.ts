@@ -9,9 +9,16 @@ export const mcpUrl = (): string => `${origin()}/mcp`
 
 export const rootsUrl = (treeId = 'my-project'): string => `${origin()}/trees/${treeId}/roots`
 
-/** One-line command: Claude Code registers Heartwood itself. Default scope is local (token stays out of the repo). */
-export const mcpAddCommand = (token = 'hw_your-token'): string =>
-  `claude mcp add --transport http heartwood ${mcpUrl()} --header "Authorization: Bearer ${token}"`
+/**
+ * One-line command: Claude Code registers Heartwood itself.
+ * --scope user makes the server available in every project/folder, not just the directory
+ * where the command is run. Without it the default "local" scope binds only to the current
+ * working directory, so the server disappears when you open Claude Code elsewhere.
+ * After running this the user must start a new Claude Code session — MCP tools load at
+ * session start, not hot.
+ */
+export const mcpAddCommand = (token = 'YOUR_HW_TOKEN'): string =>
+  `claude mcp add --transport http --scope user heartwood ${mcpUrl()} --header "Authorization: Bearer ${token}"`
 
 /** Manual alternative for any MCP client: drop into .mcp.json. */
 export const mcpJson = (token = 'hw_your-token'): string =>

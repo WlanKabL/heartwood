@@ -71,8 +71,38 @@ server scopes every read and write to your account.
 
 ## 5. Connect from Claude Code
 
-Add the server to your project's `.mcp.json` (or `~/.claude.json`), pasting the token you just
-minted into the `Authorization` header:
+Run this once — Claude Code registers Heartwood globally:
+
+```bash
+claude mcp add --transport http --scope user heartwood https://heartwood.wlankabl.com/mcp --header "Authorization: Bearer YOUR_HW_TOKEN"
+```
+
+Replace `YOUR_HW_TOKEN` with the `hw_...` token you minted in step 4. The token is shown once
+on the tokens page; copy it before leaving.
+
+**Why `--scope user`?** The default scope is `local`, which binds the server only to the
+directory where the command runs. With `--scope user` the server is available in every
+project and folder. Without it, the server disappears whenever you open Claude Code from a
+different directory.
+
+**After running it, start a new Claude Code session.** MCP tools are loaded at session start,
+not hot. The server will not appear in an already-running session.
+
+A wrong or missing token is rejected with HTTP 401, and a token only ever resolves to its
+owner's trees — two tenants never see each other's data.
+
+---
+
+### Local development (contributors only)
+
+If you are running Heartwood locally, point the URL at your local instance instead:
+
+```bash
+claude mcp add --transport http --scope user heartwood http://localhost:8722/mcp --header "Authorization: Bearer YOUR_HW_TOKEN"
+```
+
+Or wire it by hand in `.mcp.json` (project-local, token stays out of git if you use
+`.mcp.json` — but `--scope user` via the CLI is the safer default):
 
 ```json
 {
@@ -80,17 +110,11 @@ minted into the `Authorization` header:
     "heartwood": {
       "type": "http",
       "url": "http://localhost:8722/mcp",
-      "headers": { "Authorization": "Bearer hw_your-minted-token" }
+      "headers": { "Authorization": "Bearer YOUR_HW_TOKEN" }
     }
   }
 }
 ```
-
-A wrong or missing token is rejected with HTTP 401, and a token only ever resolves to its
-owner's trees — two tenants never see each other's data.
-
-> MCP servers are loaded when a Claude Code session starts. Add the config, then open a **new**
-> chat so it picks up.
 
 To make a session load your protected core automatically, point a `SessionStart` hook at the
 roots endpoint with the same token. In `.claude/settings.local.json`:
@@ -103,7 +127,7 @@ roots endpoint with the same token. In `.claude/settings.local.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -H \"Authorization: Bearer hw_your-minted-token\" http://localhost:8722/trees/keeperlog/roots"
+            "command": "curl -s -H \"Authorization: Bearer YOUR_HW_TOKEN\" https://heartwood.wlankabl.com/trees/keeperlog/roots"
           }
         ]
       }
@@ -127,7 +151,7 @@ capture new durable truths during the session. Point the hook at the roots endpo
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/path/to/heartwood/bin/hook.mjs http://localhost:8722 hw_your-minted-token keeperlog"
+            "command": "node C:/path/to/heartwood/bin/hook.mjs https://heartwood.wlankabl.com YOUR_HW_TOKEN keeperlog"
           }
         ]
       }

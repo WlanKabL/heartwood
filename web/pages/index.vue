@@ -26,8 +26,8 @@ const mcpSnippet = `{
   "mcpServers": {
     "heartwood": {
       "type": "http",
-      "url": "https://your-host/mcp",
-      "headers": { "Authorization": "Bearer hw_your-token" }
+      "url": "https://heartwood.wlankabl.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_HW_TOKEN" }
     }
   }
 }`

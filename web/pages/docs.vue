@@ -9,15 +9,19 @@ const toc = [
   { id: 'behaviour', label: '05 · How it behaves' },
 ]
 
+// --scope user is essential: it makes the server available in every project/folder.
+// Without it (the default "local" scope) the server is bound only to the directory
+// where the command ran and will not show up when Claude Code opens elsewhere.
+// After running this the user must start a new Claude Code session.
 const mcpAddDocs =
-  'claude mcp add --transport http heartwood https://your-heartwood-host/mcp --header "Authorization: Bearer hw_your-token"'
+  'claude mcp add --transport http --scope user heartwood https://heartwood.wlankabl.com/mcp --header "Authorization: Bearer YOUR_HW_TOKEN"'
 
 const mcpJsonDocs = `{
   "mcpServers": {
     "heartwood": {
       "type": "http",
-      "url": "https://your-heartwood-host/mcp",
-      "headers": { "Authorization": "Bearer hw_your-token" }
+      "url": "https://heartwood.wlankabl.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_HW_TOKEN" }
     }
   }
 }`
@@ -26,7 +30,7 @@ const hookDocs = `{
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command",
-        "command": "curl -s -H \\"Authorization: Bearer hw_your-token\\" https://your-heartwood-host/trees/my-project/roots" } ] }
+        "command": "curl -s -H \\"Authorization: Bearer YOUR_HW_TOKEN\\" https://heartwood.wlankabl.com/trees/my-project/roots" } ] }
     ]
   }
 }`
@@ -71,8 +75,11 @@ const hookDocs = `{
             <h2 class="font-serif text-[1.7rem] font-medium tracking-tight">Register the server</h2>
           </div>
           <p class="mt-4 max-w-2xl leading-relaxed text-ink-2">
-            One line, and Claude Code registers Heartwood itself. The default scope keeps the token
-            in your private config, out of the repo.
+            One line, and Claude Code registers Heartwood itself.
+            <code class="font-mono text-[0.85em]">--scope user</code> makes it available in every
+            project and folder. Without it the default local scope binds only to the current
+            directory. After running it, open a fresh Claude Code session — MCP tools load at
+            session start.
           </p>
           <div class="mt-4 max-w-2xl"><AppCopyBlock :code="mcpAddDocs" label="quick connect" /></div>
           <details class="mt-3 max-w-2xl">

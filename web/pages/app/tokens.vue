@@ -71,9 +71,9 @@ const copy = async (): Promise<void> => {
     <p class="kicker text-rust">agent credentials</p>
     <h1 class="mt-2 font-serif text-4xl font-medium tracking-tight">API tokens</h1>
     <p class="mt-3 max-w-xl text-ink-2">
-      One token is all your agent needs over MCP. Paste it into your
-      <code class="font-mono text-[0.85em]">.mcp.json</code>. The raw value is shown once, on
-      creation, and only a hash is stored.
+      One token is all your agent needs over MCP. The raw value is shown once, on creation, and
+      only a hash is stored. After minting, run the connect command below — it registers
+      Heartwood globally so it works in every project.
     </p>
 
     <!-- create -->
@@ -152,8 +152,9 @@ const copy = async (): Promise<void> => {
       <p class="kicker text-rust">connect your agent</p>
       <h2 class="mt-2 font-serif text-3xl font-medium tracking-tight">Wire it into MCP</h2>
       <p class="mt-2 max-w-xl text-ink-2">
-        Drop the token into your agent's MCP config, then open a fresh session. Swap the host for
-        your deployed URL in production.
+        Register the server once, then open a fresh session. The command connects to the live
+        Heartwood instance at
+        <code class="font-mono text-[0.85em]">heartwood.wlankabl.com</code>.
       </p>
 
       <ol class="mt-8 space-y-8">
@@ -163,8 +164,10 @@ const copy = async (): Promise<void> => {
             <h3 class="font-mono text-[0.92rem] font-medium text-ink">Register the server</h3>
           </div>
           <p class="ml-7 mt-1 text-[0.9rem] text-ink-2">
-            One line and Claude Code registers Heartwood itself. Paste your token where shown
-            (or copy the ready-made command from the box above after creating a token).
+            One line and Claude Code registers Heartwood itself.
+            <code class="font-mono text-[0.85em]">--scope user</code> makes the server available
+            in every project and folder — without it the server disappears when you open Claude
+            Code from a different directory. After running it, start a new session.
           </p>
           <div class="ml-7 mt-3 max-w-2xl">
             <AppCopyBlock :code="mcpAddCommand()" label="quick connect" />

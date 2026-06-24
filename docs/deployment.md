@@ -247,3 +247,22 @@ for manual intervention.
 
 Drizzle migrations run from the backend entrypoint on every container start. They are
 idempotent: already-applied migrations are skipped, so a restart or redeploy never re-runs them.
+
+---
+
+## 9. Connect Claude Code after deploy
+
+Once the stack is live, register the server globally in Claude Code. Run this once on each
+machine where you use Claude Code:
+
+```bash
+claude mcp add --transport http --scope user heartwood https://heartwood.wlankabl.com/mcp --header "Authorization: Bearer YOUR_HW_TOKEN"
+```
+
+Replace `YOUR_HW_TOKEN` with a token minted on the Tokens page of your deployed instance.
+`--scope user` makes the server available in every project and folder — without it the default
+`local` scope binds only to the directory where the command runs.
+
+Then start a new Claude Code session. MCP tools load at session start, not hot.
+
+Full setup walkthrough: [docs/usage.md](usage.md) section 5.
