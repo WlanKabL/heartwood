@@ -76,6 +76,6 @@ Changing a hard node is blocked until a human confirms **with the cascade shown*
 - **Workflows** — `build_guide` and `check_consistency` built in, plus user-defined ones via `define_workflow`.
 - **Frontend + deploy** — Nuxt account/token UI, prebuilt GHCR images, GitHub-Actions deploy with healthcheck and rollback behind host nginx + certbot.
 
-The first dogfood tree is Heartwood's own identity, authored through the tool itself. See [docs/usage.md](docs/usage.md) to connect it to Claude Code.
+The first dogfood tree is Heartwood's own identity, authored through the tool itself. See [docs/usage.md](docs/usage.md) to connect it to Claude Code, or [docs/self-hosting.md](docs/self-hosting.md) to run your own instance.
 
 What is **not** done yet is Phase 5 (opening up): an OSS release, an install path for others, and optional public/shared trees. See [ROADMAP.md](ROADMAP.md).
