@@ -38,6 +38,11 @@ const view = { k: 1, tx: 0, ty: 0 }
 let hover: Placed | null = null
 let dragging = false
 let last: [number, number] = [0, 0]
+// Pointer-based input unifies mouse and touch. One pointer pans (or taps to select),
+// two pointers pinch-zoom.
+const pointers = new Map<number, [number, number]>()
+let pinchDist = 0
+let moved = 0
 
 const TWO_PI = Math.PI * 2
 const woodStops: [number, string][] = [
@@ -358,28 +363,86 @@ const draw = (t: number, p: number): void => {
   c.restore()
 }
 
-const onMove = (e: MouseEvent): void => {
-  if (dragging) {
-    view.tx += e.offsetX - last[0]
-    view.ty += e.offsetY - last[1]
-    last = [e.offsetX, e.offsetY]
+const relPos = (e: PointerEvent): [number, number] => {
+  const rect = canvas.value?.getBoundingClientRect()
+  return rect ? [e.clientX - rect.left, e.clientY - rect.top] : [0, 0]
+}
+
+const onPointerDown = (e: PointerEvent): void => {
+  canvas.value?.setPointerCapture(e.pointerId)
+  const pos = relPos(e)
+  pointers.set(e.pointerId, pos)
+  if (pointers.size === 1) {
+    dragging = true
+    last = pos
+    moved = 0
+  } else if (pointers.size === 2) {
+    dragging = false
+    const pts = [...pointers.values()]
+    const a = pts[0]
+    const b = pts[1]
+    if (a && b) pinchDist = Math.hypot(a[0] - b[0], a[1] - b[1])
+  }
+}
+
+const onPointerMove = (e: PointerEvent): void => {
+  const pos = relPos(e)
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, pos)
+
+  if (pointers.size >= 2) {
+    const pts = [...pointers.values()]
+    const a = pts[0]
+    const b = pts[1]
+    if (a && b) {
+      const dist = Math.hypot(a[0] - b[0], a[1] - b[1])
+      const midX = (a[0] + b[0]) / 2
+      const midY = (a[1] + b[1]) / 2
+      if (pinchDist > 0) {
+        const [wx, wy] = toWorld(midX, midY)
+        view.k = Math.max(0.4, Math.min(4, view.k * (dist / pinchDist)))
+        view.tx = midX - wx * view.k
+        view.ty = midY - wy * view.k
+      }
+      pinchDist = dist
+    }
     return
   }
-  hover = pick(e.offsetX, e.offsetY)
-  if (canvas.value) canvas.value.style.cursor = hover ? 'pointer' : 'grab'
+
+  if (dragging && pointers.has(e.pointerId)) {
+    view.tx += pos[0] - last[0]
+    view.ty += pos[1] - last[1]
+    moved += Math.hypot(pos[0] - last[0], pos[1] - last[1])
+    last = pos
+    return
+  }
+
+  if (e.pointerType === 'mouse') {
+    hover = pick(pos[0], pos[1])
+    if (canvas.value) canvas.value.style.cursor = hover ? 'pointer' : 'grab'
+  }
 }
-const onDown = (e: MouseEvent): void => {
-  dragging = true
-  last = [e.offsetX, e.offsetY]
+
+const onPointerUp = (e: PointerEvent): void => {
+  const pos = relPos(e)
+  const wasTap = pointers.size === 1 && moved < 8
+  pointers.delete(e.pointerId)
+  if (pointers.size < 2) pinchDist = 0
+  if (pointers.size === 0) {
+    dragging = false
+    if (wasTap) {
+      const hit = pick(pos[0], pos[1])
+      emit('select', hit && !hit.core ? nodeById.get(hit.id) ?? null : null)
+    }
+    if (e.pointerType !== 'mouse') hover = null
+  } else {
+    const remaining = [...pointers.values()][0]
+    if (remaining) {
+      last = remaining
+      dragging = true
+    }
+  }
 }
-const onUp = (): void => {
-  dragging = false
-}
-const onClick = (e: MouseEvent): void => {
-  const hit = pick(e.offsetX, e.offsetY)
-  if (hit && !hit.core) emit('select', nodeById.get(hit.id) ?? null)
-  else emit('select', null)
-}
+
 const onWheel = (e: WheelEvent): void => {
   e.preventDefault()
   const [wx, wy] = toWorld(e.offsetX, e.offsetY)
@@ -404,10 +467,10 @@ onMounted(() => {
   resize()
   ro = new ResizeObserver(() => resize())
   ro.observe(el)
-  el.addEventListener('mousemove', onMove)
-  el.addEventListener('mousedown', onDown)
-  window.addEventListener('mouseup', onUp)
-  el.addEventListener('click', onClick)
+  el.addEventListener('pointermove', onPointerMove)
+  el.addEventListener('pointerdown', onPointerDown)
+  el.addEventListener('pointerup', onPointerUp)
+  el.addEventListener('pointercancel', onPointerUp)
   el.addEventListener('wheel', onWheel, { passive: false })
   raf = requestAnimationFrame(loop)
 })
@@ -425,12 +488,12 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   const el = canvas.value
   if (el) {
-    el.removeEventListener('mousemove', onMove)
-    el.removeEventListener('mousedown', onDown)
-    el.removeEventListener('click', onClick)
+    el.removeEventListener('pointermove', onPointerMove)
+    el.removeEventListener('pointerdown', onPointerDown)
+    el.removeEventListener('pointerup', onPointerUp)
+    el.removeEventListener('pointercancel', onPointerUp)
     el.removeEventListener('wheel', onWheel)
   }
-  window.removeEventListener('mouseup', onUp)
 })
 </script>
 

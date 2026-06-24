@@ -105,6 +105,29 @@ const createRoot = async (): Promise<void> => {
     rootBusy.value = false
   }
 }
+
+// Mobile bottom sheet: drag the handle down to dismiss. Pointer capture keeps the drag alive
+// even as the finger leaves the small handle and travels down the screen.
+const sheetY = ref(0)
+const sheetDragging = ref(false)
+let sheetStartY = 0
+
+const onSheetDown = (e: PointerEvent): void => {
+  sheetDragging.value = true
+  sheetStartY = e.clientY
+  if (e.currentTarget instanceof HTMLElement) e.currentTarget.setPointerCapture(e.pointerId)
+}
+const onSheetMove = (e: PointerEvent): void => {
+  if (!sheetDragging.value) return
+  sheetY.value = Math.max(0, e.clientY - sheetStartY)
+}
+const onSheetUp = (): void => {
+  if (!sheetDragging.value) return
+  sheetDragging.value = false
+  const dismiss = sheetY.value > 110
+  sheetY.value = 0
+  if (dismiss) choose(null)
+}
 </script>
 
 <template>
@@ -262,9 +285,20 @@ const createRoot = async (): Promise<void> => {
     <div v-if="selected" class="fixed inset-0 z-40 flex flex-col justify-end lg:hidden">
       <button class="absolute inset-0 bg-ink/40" aria-label="close editor" @click="choose(null)"></button>
       <div
-        class="relative max-h-[82vh] overflow-auto rounded-t-2xl border-t-2 border-ink bg-paper-2 px-5 pb-10 pt-4 shadow-2xl"
+        class="relative max-h-[82vh] overflow-auto rounded-t-2xl border-t-2 border-ink bg-paper-2 px-5 pb-10 shadow-2xl"
+        :class="sheetDragging ? '' : 'transition-transform duration-200'"
+        :style="{ transform: `translateY(${sheetY}px)` }"
       >
-        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-line"></div>
+        <!-- drag handle: touch-none so the drag pans the sheet instead of scrolling it -->
+        <div
+          class="sticky top-0 -mx-5 mb-1 cursor-grab touch-none bg-paper-2 px-5 pb-2 pt-4"
+          @pointerdown="onSheetDown"
+          @pointermove="onSheetMove"
+          @pointerup="onSheetUp"
+          @pointercancel="onSheetUp"
+        >
+          <div class="mx-auto h-1.5 w-12 rounded-full bg-line"></div>
+        </div>
         <AppNodeEditor
           :tree-id="treeId"
           :node="selected"
