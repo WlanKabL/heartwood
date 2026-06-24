@@ -52,7 +52,7 @@ const hookDocs = `{
     <div class="mt-14 grid gap-12 lg:grid-cols-[170px_1fr]">
       <SiteDocToc :items="toc" />
 
-      <div>
+      <div class="min-w-0">
         <!-- 01 -->
         <section id="token" class="scroll-mt-24">
           <div class="flex items-baseline gap-4">

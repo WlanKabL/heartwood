@@ -108,7 +108,7 @@ const toc = faqs.map((f) => ({ id: f.id, label: f.toc }))
           prompt, stability over time, cost to change, and immutability in daily work.
         </p>
       </div>
-      <div class="w-[300px] shrink-0 self-center">
+      <div class="w-full max-w-[300px] self-center sm:w-[300px] sm:shrink-0">
         <SiteSpecimenDisc />
       </div>
     </header>
@@ -116,7 +116,7 @@ const toc = faqs.map((f) => ({ id: f.id, label: f.toc }))
     <div class="mt-16 grid gap-12 lg:grid-cols-[170px_1fr]">
       <SiteDocToc :items="toc" />
 
-      <div class="border-t border-line">
+      <div class="min-w-0 border-t border-line">
         <details
           v-for="faq in faqs"
           :id="faq.id"

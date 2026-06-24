@@ -113,14 +113,18 @@ const build = (): void => {
     .size([TWO_PI, 1])
     .separation((a, b) => (a.parent === b.parent ? 1 : 1.7) / Math.max(a.depth, 1))(root)
 
-  const usable = Math.min(W, H) / 2 - 90
+  // Node radii are absolute pixels, which reads as oversized on a small screen. Scale them
+  // (and the label-room margin) down by viewport so the rings stay legible on mobile.
+  const nodeScale = Math.max(0.5, Math.min(1, Math.min(W, H) / 720))
+  const usable = Math.min(W, H) / 2 - 70 * nodeScale - 20
   const gap = usable / Math.max(root.height, 1)
 
   placed = []
   byId = new Map()
   for (const d of root.descendants()) {
     const weight = d.descendants().length - 1
-    const radius = d.data.core ? 15 : 5 + Math.sqrt(weight) * 3.4 + (d.data.hardness / 100) * 4
+    const radius =
+      (d.data.core ? 15 : 5 + Math.sqrt(weight) * 3.4 + (d.data.hardness / 100) * 4) * nodeScale
     const p: Placed = {
       id: d.data.id,
       label: d.data.label,
