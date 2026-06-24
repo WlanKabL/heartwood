@@ -2,15 +2,27 @@
 import type { ResolvedNode } from '~/types/tree'
 import { hardnessColor } from '~/types/tree'
 
-defineProps<{ nodes: ResolvedNode[]; depth?: number }>()
+defineProps<{ nodes: ResolvedNode[]; depth?: number; selectedId?: string | null }>()
+const emit = defineEmits<{ select: [node: ResolvedNode] }>()
 </script>
 
 <template>
   <ul class="space-y-1">
     <li v-for="node in nodes" :key="node.id">
       <div
-        class="group flex items-start gap-3 rounded-sm border border-transparent px-2 py-2 hover:border-line hover:bg-paper-2"
+        class="group flex cursor-pointer items-start gap-3 rounded-sm border px-2 py-2 transition-colors"
+        :class="
+          node.id === selectedId
+            ? 'border-ink bg-paper-2'
+            : 'border-transparent hover:border-line hover:bg-paper-2'
+        "
         :style="{ marginLeft: `${(depth ?? 0) * 1.4}rem` }"
+        role="button"
+        tabindex="0"
+        :aria-pressed="node.id === selectedId"
+        @click="emit('select', node)"
+        @keydown.enter.prevent="emit('select', node)"
+        @keydown.space.prevent="emit('select', node)"
       >
         <span
           class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
@@ -30,7 +42,13 @@ defineProps<{ nodes: ResolvedNode[]; depth?: number }>()
           <p class="mt-0.5 text-[0.9rem] leading-snug text-ink-2">{{ node.content }}</p>
         </div>
       </div>
-      <AppTreeOutline v-if="node.children.length" :nodes="node.children" :depth="(depth ?? 0) + 1" />
+      <AppTreeOutline
+        v-if="node.children.length"
+        :nodes="node.children"
+        :depth="(depth ?? 0) + 1"
+        :selected-id="selectedId"
+        @select="(n) => emit('select', n)"
+      />
     </li>
   </ul>
 </template>

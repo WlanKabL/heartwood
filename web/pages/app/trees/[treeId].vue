@@ -18,6 +18,12 @@ const view = ref<'rings' | 'outline'>('rings')
 const selected = ref<ResolvedNode | null>(null)
 const query = ref('')
 
+// The canvas (rings) is mouse-driven and not touch-friendly, so default to the outline on
+// small screens where the outline is the usable, tappable view.
+onMounted(() => {
+  if (import.meta.client && window.innerWidth < 1024) view.value = 'outline'
+})
+
 // new-root form
 const addingRoot = ref(false)
 const rootLabel = ref('')
@@ -116,7 +122,7 @@ const createRoot = async (): Promise<void> => {
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center justify-end gap-3">
         <!-- search -->
         <div class="relative">
           <input
@@ -206,7 +212,7 @@ const createRoot = async (): Promise<void> => {
         />
 
         <div v-else class="h-full overflow-auto px-6 py-6">
-          <AppTreeOutline :nodes="forest" />
+          <AppTreeOutline :nodes="forest" :selected-id="selected?.id ?? null" @select="choose" />
         </div>
       </div>
 
@@ -250,6 +256,23 @@ const createRoot = async (): Promise<void> => {
           </div>
         </template>
       </aside>
+    </div>
+
+    <!-- mobile node editor: bottom sheet (the desktop sidebar is hidden below lg) -->
+    <div v-if="selected" class="fixed inset-0 z-40 flex flex-col justify-end lg:hidden">
+      <button class="absolute inset-0 bg-ink/40" aria-label="close editor" @click="choose(null)"></button>
+      <div
+        class="relative max-h-[82vh] overflow-auto rounded-t-2xl border-t-2 border-ink bg-paper-2 px-5 pb-10 pt-4 shadow-2xl"
+      >
+        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-line"></div>
+        <AppNodeEditor
+          :tree-id="treeId"
+          :node="selected"
+          :all-nodes="flat"
+          @select="choose"
+          @changed="onChanged"
+        />
+      </div>
     </div>
 
     <!-- new root modal -->
