@@ -223,19 +223,18 @@ Write (protected nodes need `confirm: true`, which returns a cascade preview fir
 | `move_node` | `{ treeId, nodeId, newParentId, confirm? }` | the node, or a cascade preview |
 | `delete_node` | `{ treeId, nodeId, confirm? }` | the deleted ids, or a cascade preview |
 
+Guidance (each is **both a tool and a slash-command prompt**, so an agent can call it on its own and a human can pick it from the prompt menu):
+
+| Tool / Prompt | Input | Returns |
+| --- | --- | --- |
+| `build_guide` | `{ treeId? }` | the full authoring guide: choose a treeId, understand the project, build a deep, English-language tree. With a `treeId` it also loads that tree's protected core; without one it explains how to pick a treeId first. Call it before creating nodes. |
+| `check_consistency` | `{ treeId, draft }` | flags where a draft (copy, plan, message, decision) contradicts the protected truths |
+
+The bootstrap prompt on the tokens page is deliberately tiny: confirm Heartwood is reachable, call `build_guide`, follow it. All the method lives in `build_guide`, in one place.
+
 ## Workflows
 
-Workflows are MCP prompts (slash-commands) that load the project's truths and lay out a procedure. Two are built in and generic:
-
-| Prompt | Args | What it does |
-| --- | --- | --- |
-| `init_tree` | none | first-time setup for a project with no tree yet: pick a real treeId, understand the project, ask only as much as the gap demands, build roots first |
-| `build_guide` | `{ treeId }` | thorough rules for authoring a coherent tree, with the current core loaded |
-| `check_consistency` | `{ treeId, draft }` | flags where a draft (copy, plan, message, decision) contradicts the truths |
-
-Starting a brand-new project? Run `/init_tree` first to choose the treeId and shape the roots, then `/build_guide` to keep authoring with the full ruleset.
-
-The rest are **yours**. Define your own with the `define_workflow` tool, then run them:
+Workflows are **yours**. Define your own with the `define_workflow` tool, then run them:
 
 | Tool | Input | Returns |
 | --- | --- | --- |
@@ -258,6 +257,6 @@ Then `run_workflow name="plan_post" input="the new collab"` returns the ready-to
 This is the multi-tenant core, live in production: GitHub login, per-account API tokens, and
 tenant-scoped trees on Postgres, with cascade-confirmed editing of protected nodes. Every store
 instance is bound to a `userId`, so isolation cannot be forgotten and is enforced at the HTTP/MCP
-boundary (see `src/http/isolation.test.ts`). Build-methodology guidance ships as the `init_tree`
-and `build_guide` prompts above. The one remaining phase is opening up (OSS release, public
+boundary (see `src/http/isolation.test.ts`). Build-methodology guidance ships as the `build_guide`
+tool and prompt above. The one remaining phase is opening up (OSS release, public
 trees); see [ROADMAP.md](../ROADMAP.md).

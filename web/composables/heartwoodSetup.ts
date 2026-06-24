@@ -7,7 +7,7 @@ const origin = (): string =>
 
 export const mcpUrl = (): string => `${origin()}/mcp`
 
-export const rootsUrl = (treeId = 'my-project'): string => `${origin()}/trees/${treeId}/roots`
+export const rootsUrl = (treeId = 'YOUR_TREE_ID'): string => `${origin()}/trees/${treeId}/roots`
 
 /**
  * One-line command: Claude Code registers Heartwood itself.
@@ -33,7 +33,7 @@ export const mcpJson = (token = 'hw_your-token'): string =>
 }`
 
 /** SessionStart hook: auto-load the protected core into every new chat. */
-export const hookSnippet = (token = 'hw_your-token', treeId = 'my-project'): string =>
+export const hookSnippet = (token = 'hw_your-token', treeId = 'YOUR_TREE_ID'): string =>
   `{
   "hooks": {
     "SessionStart": [
@@ -43,14 +43,10 @@ export const hookSnippet = (token = 'hw_your-token', treeId = 'my-project'): str
   }
 }`
 
-/** Paste into a Claude Code session that has Heartwood connected; the agent builds the first tree for you. */
-export const bootstrapPrompt = (treeId = 'my-project'): string =>
-  `You have the Heartwood MCP server connected (tools: get_tree, get_roots, create_node, and more).
-Initialize my project's truth tree, treeId "${treeId}".
+/** Paste into a Claude Code session that has Heartwood connected; the agent loads the guide and builds the tree. */
+export const bootstrapPrompt = (): string =>
+  `Capture this project's durable truth as a Heartwood tree.
 
-1. First ask me 4 to 6 sharp questions: what this project fundamentally is, who it is for, how it should sound, and what it is explicitly NOT.
-2. From my answers, propose a small set of ROOT truths (e.g. identity, voice, positioning, audiences) plus a few nested branches. One node = one durable truth.
-3. Create them with create_node (parentId: null for roots, the parent's id to nest). Keep anything volatile (prices, dates, metrics, versions) out of the tree entirely.
-4. When done, show me get_tree and a one-line summary of the protected core.
-
-Be concise. Propose, do not over-ask.`
+1. Confirm you can reach the Heartwood MCP server: call list_trees. If that errors, Heartwood is not connected, so tell me and stop here.
+2. Call the build_guide tool to load Heartwood's full authoring guide.
+3. Follow that guide end to end: choose the right treeId, understand the project, ask me what it needs, and build the tree.`

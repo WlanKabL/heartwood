@@ -111,6 +111,8 @@ describe('http + mcp end to end', () => {
     const client = await connect(url, tokenA)
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'build_guide',
+      'check_consistency',
       'create_node',
       'define_workflow',
       'delete_node',
@@ -248,21 +250,19 @@ describe('http + mcp end to end', () => {
     })
 
     const { prompts } = await client.listPrompts()
-    expect(prompts.map((p) => p.name).sort()).toEqual([
-      'build_guide',
-      'check_consistency',
-      'init_tree',
-      'run_workflow',
-    ])
+    expect(prompts.map((p) => p.name).sort()).toEqual(['build_guide', 'check_consistency', 'run_workflow'])
 
     const built = await client.getPrompt({ name: 'build_guide', arguments: { treeId: 'w' } })
     const text = built.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
     expect(text).toContain('the one truth')
 
-    const init = await client.getPrompt({ name: 'init_tree' })
-    const initText = init.messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n')
-    expect(initText).toContain('list_trees')
-    expect(initText).toContain('my-project')
+    // build_guide is also a tool, so an agent can load the guide on its own. Without a treeId it
+    // explains how to pick one; with a treeId it loads that tree's protected core.
+    const guideToolText = textOf(await client.callTool({ name: 'build_guide', arguments: {} }))
+    expect(guideToolText).toContain('list_trees')
+    expect(guideToolText).toContain('GO DEEP')
+    const guideWithTree = textOf(await client.callTool({ name: 'build_guide', arguments: { treeId: 'w' } }))
+    expect(guideWithTree).toContain('the one truth')
     await client.close()
   })
 

@@ -30,7 +30,7 @@ const hookDocs = `{
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command",
-        "command": "curl -s -H \\"Authorization: Bearer YOUR_HW_TOKEN\\" https://heartwood.wlankabl.com/trees/my-project/roots" } ] }
+        "command": "curl -s -H \\"Authorization: Bearer YOUR_HW_TOKEN\\" https://heartwood.wlankabl.com/trees/YOUR_TREE_ID/roots" } ] }
     ]
   }
 }`

@@ -4,7 +4,7 @@ import type { TreeRepository } from '../core/repository.js'
 import { getResolvedTree, getResolvedSubtree, getProtectedNodes, listTreeSummaries, deleteTree, searchTruths } from '../core/service.js'
 import { createNode } from '../core/create.js'
 import { updateNode, moveNode, deleteNode } from '../core/write.js'
-import { registerWorkflows } from './workflows.js'
+import { registerWorkflows, buildGuideText, checkConsistencyText } from './workflows.js'
 import type { WorkflowRepository } from '../core/workflow-repository.js'
 import { defineWorkflow, runWorkflow } from '../core/workflow.js'
 
@@ -91,7 +91,7 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
         'The response may also include two advisory fields — both are informational only and never block the create:',
         'volatilityWarning is set when the content looks like it contains a changing figure (price, percentage, date, or version) that may go stale.',
         'similarTo points at an existing node whose label shares salient words with the new one, as a dedup hint.',
-        'Structure guidance: add only DURABLE truths. If the content would be wrong in a few months (a price, a metric, a percentage, a current number), it belongs in a decision-record document, not in the tree. One node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent.',
+        'Structure guidance: add only DURABLE truths. If the content would be wrong in a few months (a price, a metric, a percentage, a current number), it belongs in a decision-record document, not in the tree. One node is one truth. Keep sibling nodes at a similar level of detail. Give a distinct theme its own root instead of overloading an unrelated parent. Write content in English. For the full method (depth, orientation, the placement rule), call the build_guide tool first.',
       ].join(' '),
       inputSchema: {
         treeId: z.string(),
@@ -334,6 +334,38 @@ export const buildMcpServer = (deps: McpDeps): McpServer => {
     async (args) => {
       try {
         return ok({ text: await runWorkflow(deps.repo, deps.workflows, args, now()) })
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'build_guide',
+    {
+      description:
+        "Load Heartwood's authoring guide before creating nodes: how to choose a treeId, understand the project, and build a DEEP, coherent, English-language tree of durable truths. Pass a treeId to also load that tree's current protected core; omit it when you have not chosen one yet. Read and follow what it returns.",
+      inputSchema: { treeId: z.string().optional() },
+    },
+    async ({ treeId }) => {
+      try {
+        return ok({ guide: await buildGuideText(deps, treeId) })
+      } catch (error) {
+        return fail(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'check_consistency',
+    {
+      description:
+        "Check a draft (copy, plan, message, decision) against a tree's protected truths and flag contradictions before it ships.",
+      inputSchema: { treeId: z.string(), draft: z.string() },
+    },
+    async ({ treeId, draft }) => {
+      try {
+        return ok({ check: await checkConsistencyText(deps, treeId, draft) })
       } catch (error) {
         return fail(error)
       }
