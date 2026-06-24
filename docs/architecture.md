@@ -1,6 +1,8 @@
 # Heartwood — Architecture & Phase 0 Spec
 
 > Technical design for the core. Concept lives in [../README.md](../README.md); build order in [../ROADMAP.md](../ROADMAP.md). This document is the Phase 0 deliverable: data model, hardness algorithm, API and layering, settled before feature code.
+>
+> **Historical note (2026-06-24):** this is the original Phase 0 spec. Everything it stages as "Phase 2/3" is built and live now, and storage moved fully to Postgres (SQLite is gone). The data model, hardness algorithm and layering below are still accurate; only the "arrives later" framing is dated. Current status is in [../ROADMAP.md](../ROADMAP.md).
 
 ## Decisions
 

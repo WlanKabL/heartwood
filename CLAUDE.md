@@ -31,8 +31,8 @@ Not a revenue product (portfolio + self-use). Not an agent runtime (layers on to
 
 ## Stack
 
-To be decided in Phase 0. Likely Node + TypeScript, SQLite to start, MCP server for retrieval. Confirm before scaffolding.
+Node + TypeScript (strict, ESM/NodeNext, explicit `.js` imports), Fastify HTTP, `@modelcontextprotocol/sdk` Streamable HTTP at `/mcp`, Postgres via Drizzle, zod 4, vitest, pnpm 10, Node 22. GitHub-OAuth (`@fastify/oauth2`) for the browser, hashed `hw_` bearer tokens for MCP. Frontend is Nuxt. Native modules note: `@fastify/secure-session` pulls in `sodium-native`, which needs glibc, so the backend image is `node:22-slim`, not alpine.
 
 ## Planning
 
-Roadmap lives in [ROADMAP.md](ROADMAP.md), MVP-first. Phase 1 is the single-user core dogfooded against KeeperLog.
+Roadmap lives in [ROADMAP.md](ROADMAP.md). **Phases 0 through 4 are shipped and live in production** at <https://heartwood.wlankabl.com>; only Phase 5 (opening up) is open. Heartwood's own identity is the first tree, authored through the tool; KeeperLog is the first real product tree.

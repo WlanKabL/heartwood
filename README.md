@@ -68,4 +68,14 @@ Changing a hard node is blocked until a human confirms **with the cascade shown*
 
 ## Status
 
-**V1.** The single-user core is complete and tested (98 tests): the truth engine, SQLite storage, a local HTTP MCP server with bearer-token auth, write-governance (protected nodes need confirmation before a change), a SessionStart hook that auto-loads the truths into every chat, and workflows (two generic defaults plus user-defined ones via `define_workflow`). See [docs/usage.md](docs/usage.md) to run it and connect it to Claude Code. Next up: accounts, a frontend, multi-user. See [ROADMAP.md](ROADMAP.md).
+**Live in production** at <https://heartwood.wlankabl.com>. The core through multi-tenant and workflows is built, tested and deployed:
+
+- **Truth engine** — server-computed hardness, the iron rule enforced at read time, write-governance (protected nodes need a cascade-confirmed YES before they change).
+- **Multi-tenant** — Postgres (Drizzle), GitHub-OAuth login, per-account API tokens, tenant-scoped trees. One token only ever sees its owner's forest.
+- **HTTP MCP server** — Streamable HTTP at `/mcp`, bearer-token auth, plus a SessionStart hook that auto-loads a tree's protected core into a chat.
+- **Workflows** — `build_guide` and `check_consistency` built in, plus user-defined ones via `define_workflow`.
+- **Frontend + deploy** — Nuxt account/token UI, prebuilt GHCR images, GitHub-Actions deploy with healthcheck and rollback behind host nginx + certbot.
+
+The first dogfood tree is Heartwood's own identity, authored through the tool itself. See [docs/usage.md](docs/usage.md) to connect it to Claude Code.
+
+What is **not** done yet is Phase 5 (opening up): an OSS release, an install path for others, and optional public/shared trees. See [ROADMAP.md](ROADMAP.md).
